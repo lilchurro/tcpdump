@@ -1,5 +1,7 @@
 # tcpdump, with packet sanitization flags
 
+[![Build Status](https://travis-ci.org/lilchurro/tcpdump.svg?branch=master)](https://travis-ci.org/lilchurro/tcpdump)
+
 To report bugs and issues, please open a ticket on this project's
 Github page.
 
