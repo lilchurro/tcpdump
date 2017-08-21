@@ -82,19 +82,13 @@ extern int32_t thiszone;	/* seconds offset from gmt to local time */
 extern const char istr[];
 
 #if !defined(HAVE_SNPRINTF)
-int snprintf (char *str, size_t sz, const char *format, ...)
-#ifdef __ATTRIBUTE___FORMAT_OK
-     __attribute__((format (printf, 3, 4)))
-#endif /* __ATTRIBUTE___FORMAT_OK */
-     ;
+int snprintf (char *str, size_t sz, FORMAT_STRING(const char *format), ...)
+     PRINTFLIKE(3, 4);
 #endif /* !defined(HAVE_SNPRINTF) */
 
 #if !defined(HAVE_VSNPRINTF)
-int vsnprintf (char *str, size_t sz, const char *format, va_list ap)
-#ifdef __ATTRIBUTE___FORMAT_OK
-     __attribute__((format (printf, 3, 0)))
-#endif /* __ATTRIBUTE___FORMAT_OK */
-     ;
+int vsnprintf (char *str, size_t sz, FORMAT_STRING(const char *format),
+     va_list ap) PRINTFLIKE(3, 0);
 #endif /* !defined(HAVE_VSNPRINTF) */
 
 #ifndef HAVE_STRLCAT
@@ -192,27 +186,15 @@ struct netdissect_options {
   /* pointer to function to do regular output */
   int  (*ndo_printf)(netdissect_options *,
 		     const char *fmt, ...)
-#ifdef __ATTRIBUTE___FORMAT_OK_FOR_FUNCTION_POINTERS
-		     __attribute__ ((format (printf, 2, 3)))
-#endif
-		     ;
+		     PRINTFLIKE_FUNCPTR(2, 3);
   /* pointer to function to output errors */
-  void (*ndo_error)(netdissect_options *,
-		    const char *fmt, ...)
-#ifdef __ATTRIBUTE___NORETURN_OK_FOR_FUNCTION_POINTERS
-		     __attribute__ ((noreturn))
-#endif /* __ATTRIBUTE___NORETURN_OK_FOR_FUNCTION_POINTERS */
-#ifdef __ATTRIBUTE___FORMAT_OK_FOR_FUNCTION_POINTERS
-		     __attribute__ ((format (printf, 2, 3)))
-#endif /* __ATTRIBUTE___FORMAT_OK_FOR_FUNCTION_POINTERS */
-		     ;
+  void NORETURN_FUNCPTR (*ndo_error)(netdissect_options *,
+				     const char *fmt, ...)
+				     PRINTFLIKE_FUNCPTR(2, 3);
   /* pointer to function to output warnings */
   void (*ndo_warning)(netdissect_options *,
 		      const char *fmt, ...)
-#ifdef __ATTRIBUTE___FORMAT_OK_FOR_FUNCTION_POINTERS
-		     __attribute__ ((format (printf, 2, 3)))
-#endif
-		     ;
+		      PRINTFLIKE_FUNCPTR(2, 3);
 };
 
 #define PT_VAT		1	/* Visual Audio Tool */
