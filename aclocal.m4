@@ -1234,93 +1234,44 @@ AC_MSG_RESULT($ac_cv___attribute___unused)
 ])
 
 dnl
-dnl Test whether __attribute__((format)) can be used without warnings
+dnl Test whether __attribute__((fallthrough)) can be used without warnings
 dnl
 
-AC_DEFUN(AC_C___ATTRIBUTE___FORMAT, [
-AC_MSG_CHECKING([whether __attribute__((format)) can be used without warnings])
-AC_CACHE_VAL(ac_cv___attribute___format, [
+AC_DEFUN(AC_C___ATTRIBUTE___FALLTHROUGH, [
+AC_MSG_CHECKING([whether __attribute__((fallthrough)) can be used without warnings])
+AC_CACHE_VAL(ac_cv___attribute___fallthrough, [
 save_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS $ac_lbl_cc_force_warning_errors"
 AC_COMPILE_IFELSE([
   AC_LANG_SOURCE([[
-#include <stdlib.h>
-
-extern int foo(const char *fmt, ...)
-		  __attribute__ ((format (printf, 1, 2)));
+#include <stdio.h>
 
 int
 main(int argc, char **argv)
 {
-  foo("%s", "test");
+	int x = 1;
+	switch (x)
+	{
+	case 1:
+		printf ("x == %d\n", x);
+		__attribute__ ((fallthrough));
+	case 2:
+		printf ("x == %d\n", x);
+		break;
+	default:
+		return 0;
+	}
+	return x;
 }
   ]])],
-ac_cv___attribute___format=yes,
-ac_cv___attribute___format=no)])
+ac_cv___attribute___fallthrough=yes,
+ac_cv___attribute___fallthrough=no)])
 CFLAGS="$save_CFLAGS"
-if test "$ac_cv___attribute___format" = "yes"; then
-  AC_DEFINE(__ATTRIBUTE___FORMAT_OK, 1,
-    [define if your compiler allows __attribute__((format)) without a warning])
+if test "$ac_cv___attribute___fallthrough" = "yes"; then
+  AC_DEFINE(__ATTRIBUTE___FALLTHROUGH_OK, 1,
+    [define if your compiler allows __attribute__((fallthrough)) without a warning])
 fi
-AC_MSG_RESULT($ac_cv___attribute___format)
-])
-
-dnl
-dnl Test whether __attribute__((format)) can be applied to function
-dnl pointers
-dnl
-
-AC_DEFUN(AC_C___ATTRIBUTE___FORMAT_FUNCTION_POINTER, [
-AC_MSG_CHECKING([whether __attribute__((format)) can be applied to function pointers])
-AC_CACHE_VAL(ac_cv___attribute___format_function_pointer, [
-AC_COMPILE_IFELSE([
-  AC_LANG_SOURCE([[
-#include <stdlib.h>
-
-extern int (*foo)(const char *fmt, ...)
-		  __attribute__ ((format (printf, 1, 2)));
-
-int
-main(int argc, char **argv)
-{
-  (*foo)("%s", "test");
-}
-  ]])],
-ac_cv___attribute___format_function_pointer=yes,
-ac_cv___attribute___format_function_pointer=no)])
-if test "$ac_cv___attribute___format_function_pointer" = "yes"; then
-  AC_DEFINE(__ATTRIBUTE___FORMAT_OK_FOR_FUNCTION_POINTERS, 1,
-    [define if your compiler allows __attribute__((format)) to be applied to function pointers])
-fi
-AC_MSG_RESULT($ac_cv___attribute___format_function_pointer)
-])
-
-AC_DEFUN(AC_C___ATTRIBUTE___NORETURN_FUNCTION_POINTER, [
-AC_MSG_CHECKING([whether __attribute__((noreturn)) can be applied to function pointers without warnings])
-AC_CACHE_VAL(ac_cv___attribute___noreturn_function_pointer, [
-save_CFLAGS="$CFLAGS"
-CFLAGS="$CFLAGS $ac_lbl_cc_force_warning_errors"
-AC_COMPILE_IFELSE([
-  AC_LANG_SOURCE([[
-#include <stdlib.h>
-
-extern int (*foo)(int i)
-		  __attribute__ ((noreturn));
-
-int
-main(int argc, char **argv)
-{
-  (*foo)(1);
-}
-  ]])],
-ac_cv___attribute___noreturn_function_pointer=yes,
-ac_cv___attribute___noreturn_function_pointer=no)])
-CFLAGS="$save_CFLAGS"
-if test "$ac_cv___attribute___noreturn_function_pointer" = "yes"; then
-  AC_DEFINE(__ATTRIBUTE___NORETURN_OK_FOR_FUNCTION_POINTERS, 1,
-    [define if your compiler allows __attribute__((noreturn)) to be applied to function pointers])
-fi
-AC_MSG_RESULT($ac_cv___attribute___noreturn_function_pointer)
+AC_MSG_RESULT($ac_cv___attribute___fallthrough)
 ])
 
 AC_DEFUN(AC_LBL_SSLEAY,

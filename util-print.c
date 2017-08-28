@@ -21,7 +21,7 @@
 
 /*
  * txtproto_print() derived from original code by Hannes Gredler
- * (hannes@juniper.net):
+ * (hannes@gredler.at):
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -86,7 +86,7 @@ fn_print_char(netdissect_options *ndo, u_char c)
 }
 
 /*
- * Print out a null-terminated filename (or other ascii string).
+ * Print out a null-terminated filename (or other ASCII string).
  * If ep is NULL, assume no truncation check is needed.
  * Return true if truncated.
  * Stop at ep (if given) or before the null char, whichever is first.
@@ -119,7 +119,7 @@ fn_print(netdissect_options *ndo,
 }
 
 /*
- * Print out a null-terminated filename (or other ascii string) from
+ * Print out a null-terminated filename (or other ASCII string) from
  * a fixed-length buffer.
  * If ep is NULL, assume no truncation check is needed.
  * Return the number of bytes of string processed, including the
@@ -169,7 +169,7 @@ fn_printztn(netdissect_options *ndo,
 }
 
 /*
- * Print out a counted filename (or other ascii string).
+ * Print out a counted filename (or other ASCII string).
  * If ep is NULL, assume no truncation check is needed.
  * Return true if truncated.
  * Stop at ep (if given) or after n bytes, whichever is first.
@@ -197,7 +197,7 @@ fn_printn(netdissect_options *ndo,
 }
 
 /*
- * Print out a null-padded filename (or other ascii string).
+ * Print out a null-padded filename (or other ASCII string).
  * If ep is NULL, assume no truncation check is needed.
  * Return true if truncated.
  * Stop at ep (if given) or after n bytes or before the null char,

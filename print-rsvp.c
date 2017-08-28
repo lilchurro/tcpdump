@@ -12,7 +12,7 @@
  * LIMITATION, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
  * FOR A PARTICULAR PURPOSE.
  *
- * Original code by Hannes Gredler (hannes@juniper.net)
+ * Original code by Hannes Gredler (hannes@gredler.at)
  */
 
 /* \summary: Resource ReSerVation Protocol (RSVP) printer */
@@ -1768,6 +1768,7 @@ rsvp_obj_print(netdissect_options *ndo,
             default:
                 hexdump=TRUE;
             }
+            break;
 
         case RSVP_OBJ_S2L:
             switch (rsvp_obj_ctype) {
@@ -1792,6 +1793,7 @@ rsvp_obj_print(netdissect_options *ndo,
             default:
                 hexdump=TRUE;
             }
+            break;
 
         /*
          *  FIXME those are the defined objects that lack a decoder
