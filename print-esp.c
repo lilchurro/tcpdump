@@ -156,8 +156,10 @@ int esp_print_decrypt_buffer_by_ikev2(netdissect_options *ndo,
 {
 	struct sa_list *sa;
 	const u_char *iv;
-	int len;
+	unsigned int len;
 	EVP_CIPHER_CTX *ctx;
+	unsigned int block_size, output_buffer_size;
+	u_char *output_buffer;
 
 	/* initiator arg is any non-zero value */
 	if(initiator) initiator=1;
@@ -188,17 +190,35 @@ int esp_print_decrypt_buffer_by_ikev2(netdissect_options *ndo,
 	ctx = EVP_CIPHER_CTX_new();
 	if (ctx == NULL)
 		return 0;
+	/*
+	 * Allocate a buffer for the decrypted data.
+	 * The output buffer must be separate from the input buffer, and
+	 * its size must be a multiple of the cipher block size.
+	 */
+	block_size = (unsigned int)EVP_CIPHER_CTX_block_size(ctx);
+	output_buffer_size = len + (block_size - len % block_size);
+	output_buffer = (u_char *)malloc(output_buffer_size);
+	if (output_buffer == NULL) {
+		(*ndo->ndo_warning)(ndo, "can't allocate memory for decryption buffer");
+		return 0;
+	}
 	if (EVP_CipherInit(ctx, sa->evp, sa->secret, NULL, 0) < 0)
 		(*ndo->ndo_warning)(ndo, "espkey init failed");
 	EVP_CipherInit(ctx, NULL, NULL, iv, 0);
-	EVP_Cipher(ctx, buf, buf, len);
+	EVP_Cipher(ctx, output_buffer, buf, len);
 	EVP_CIPHER_CTX_free(ctx);
+
+	/*
+	 * XXX - of course this is wrong, because buf is a const buffer,
+	 * but changing this would require a more complicated fix.
+	 */
+	memcpy(buf, output_buffer, len);
+	free(output_buffer);
 
 	ndo->ndo_packetp = buf;
 	ndo->ndo_snapend = end;
 
 	return 1;
-
 }
 USES_APPLE_RST
 
@@ -606,6 +626,8 @@ esp_print(netdissect_options *ndo,
 	const u_char *ivoff;
 	const u_char *p;
 	EVP_CIPHER_CTX *ctx;
+	unsigned int block_size, output_buffer_size;
+	u_char *output_buffer;
 #endif
 
 	esp = (const struct newesp *)bp;
@@ -703,7 +725,9 @@ esp_print(netdissect_options *ndo,
 		ep = bp2 + len;
 	}
 
+	/* pointer to the IV, if there is one */
 	ivoff = (const u_char *)(esp + 1) + 0;
+	/* length of the IV, if there is one; 0, if there isn't */
 	ivlen = sa->ivlen;
 	secret = sa->secret;
 	ep = ep - sa->authlen;
@@ -711,13 +735,36 @@ esp_print(netdissect_options *ndo,
 	if (sa->evp) {
 		ctx = EVP_CIPHER_CTX_new();
 		if (ctx != NULL) {
+			/*
+			 * Allocate a buffer for the decrypted data.
+			 * The output buffer must be separate from the
+			 * input buffer, and its size must be a multiple
+			 * of the cipher block size.
+			 */
+			block_size = (unsigned int)EVP_CIPHER_CTX_block_size(ctx);
+			output_buffer_size = len + (block_size - len % block_size);
+			output_buffer = (u_char *)malloc(output_buffer_size);
+			if (output_buffer == NULL) {
+				(*ndo->ndo_warning)(ndo, "can't allocate memory for decryption buffer");
+				return -1;
+			}
+
 			if (EVP_CipherInit(ctx, sa->evp, secret, NULL, 0) < 0)
 				(*ndo->ndo_warning)(ndo, "espkey init failed");
 
 			p = ivoff;
 			EVP_CipherInit(ctx, NULL, NULL, p, 0);
-			EVP_Cipher(ctx, p + ivlen, p + ivlen, ep - (p + ivlen));
+			len = ep - (p + ivlen);
+
+			EVP_Cipher(ctx, output_buffer, p + ivlen, len);
 			EVP_CIPHER_CTX_free(ctx);
+			/*
+			 * XXX - of course this is wrong, because buf is a
+			 * const buffer, but changing this would require a
+			 * more complicated fix.
+			 */
+			memcpy(p + ivlen, output_buffer, len);
+			free(output_buffer);
 			advance = ivoff - (const u_char *)esp + ivlen;
 		} else
 			advance = sizeof(struct newesp);

@@ -113,10 +113,16 @@ struct s_fixedpt {
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  */
 
+/* Length of the NTP message with the mandatory fields ("the header")
+ * and without any optional fields (extension, Key Identifier,
+ * Message Digest).
+ */
+#define NTP_MSG_MINLEN 48
+
 struct ntpdata {
 	u_char status;		/* status of local clock and leap info */
 	u_char stratum;		/* Stratum level */
-	u_char ppoll;		/* poll value */
+	int ppoll:8;		/* poll value */
 	int precision:8;
 	struct s_fixedpt root_delay;
 	struct s_fixedpt root_dispersion;
@@ -126,7 +132,7 @@ struct ntpdata {
 	struct l_fixedpt rec_timestamp;
 	struct l_fixedpt xmt_timestamp;
         uint32_t key_id;
-        uint8_t  message_digest[16];
+        uint8_t  message_digest[20];
 };
 /*
  *	Leap Second Codes (high order two bits)
@@ -141,11 +147,14 @@ struct ntpdata {
  */
 #define	NTPVERSION_1	0x08
 #define	VERSIONMASK	0x38
+#define	VERSIONSHIFT	3
 #define LEAPMASK	0xc0
+#define LEAPSHIFT	6
 #ifdef MODEMASK
 #undef MODEMASK					/* Solaris sucks */
 #endif
 #define	MODEMASK	0x07
+#define	MODESHIFT	0
 
 /*
  *	Code values
@@ -156,7 +165,7 @@ struct ntpdata {
 #define	MODE_CLIENT	3	/* client */
 #define	MODE_SERVER	4	/* server */
 #define	MODE_BROADCAST	5	/* broadcast */
-#define	MODE_RES1	6	/* reserved */
+#define	MODE_CONTROL	6	/* control message */
 #define	MODE_RES2	7	/* reserved */
 
 /*
@@ -170,6 +179,7 @@ struct ntpdata {
 static void p_sfix(netdissect_options *ndo, const struct s_fixedpt *);
 static void p_ntp_time(netdissect_options *, const struct l_fixedpt *);
 static void p_ntp_delta(netdissect_options *, const struct l_fixedpt *, const struct l_fixedpt *);
+static void p_poll(netdissect_options *, register const int);
 
 static const struct tok ntp_mode_values[] = {
     { MODE_UNSPEC,    "unspecified" },
@@ -178,7 +188,7 @@ static const struct tok ntp_mode_values[] = {
     { MODE_CLIENT,    "Client" },
     { MODE_SERVER,    "Server" },
     { MODE_BROADCAST, "Broadcast" },
-    { MODE_RES1,      "Reserved" },
+    { MODE_CONTROL,   "Control Message" },
     { MODE_RES2,      "Reserved" },
     { 0, NULL }
 };
@@ -207,11 +217,16 @@ ntp_print(netdissect_options *ndo,
 	register const struct ntpdata *bp;
 	int mode, version, leapind;
 
+	if (length < NTP_MSG_MINLEN) {
+		ND_PRINT((ndo, "NTP, length %u", length));
+		goto invalid;
+	}
+
 	bp = (const struct ntpdata *)cp;
 
 	ND_TCHECK(bp->status);
 
-	version = (int)(bp->status & VERSIONMASK) >> 3;
+	version = (int)(bp->status & VERSIONMASK) >> VERSIONSHIFT;
 	ND_PRINT((ndo, "NTPv%d", version));
 
 	mode = bp->status & MODEMASK;
@@ -236,8 +251,10 @@ ntp_print(netdissect_options *ndo,
 		bp->stratum,
 		tok2str(ntp_stratum_values, (bp->stratum >=2 && bp->stratum<=15) ? "secondary reference" : "reserved", bp->stratum)));
 
-	ND_TCHECK(bp->ppoll);
-	ND_PRINT((ndo, ", poll %u (%us)", bp->ppoll, 1 << bp->ppoll));
+	/* Can't ND_TCHECK bp->ppoll bitfield so bp->stratum + 2 instead */
+	ND_TCHECK2(bp->stratum, 2);
+	ND_PRINT((ndo, ", poll %d", bp->ppoll));
+	p_poll(ndo, bp->ppoll);
 
 	/* Can't ND_TCHECK bp->precision bitfield so bp->distance + 0 instead */
 	ND_TCHECK2(bp->root_delay, 0);
@@ -276,7 +293,9 @@ ntp_print(netdissect_options *ndo,
 		return;
 
 	default:
-		ND_PRINT((ndo, "%s", ipaddr_string(ndo, &(bp->refid))));
+		/* In NTPv4 (RFC 5905) refid is an IPv4 address or first 32 bits of
+		   MD5 sum of IPv6 address */
+		ND_PRINT((ndo, "0x%08x", EXTRACT_32BITS(&bp->refid)));
 		break;
 	}
 
@@ -302,19 +321,37 @@ ntp_print(netdissect_options *ndo,
 	ND_PRINT((ndo, "\n\t    Originator - Transmit Timestamp: "));
 	p_ntp_delta(ndo, &(bp->org_timestamp), &(bp->xmt_timestamp));
 
-	if ( (sizeof(struct ntpdata) - length) == 16) { 	/* Optional: key-id */
+	/* FIXME: this code is not aware of any extension fields */
+	if (length == NTP_MSG_MINLEN + 4) { 	/* Optional: key-id (crypto-NAK) */
 		ND_TCHECK(bp->key_id);
-		ND_PRINT((ndo, "\n\tKey id: %u", bp->key_id));
-	} else if ( (sizeof(struct ntpdata) - length) == 0) { 	/* Optional: key-id + authentication */
+		ND_PRINT((ndo, "\n\tKey id: %u", EXTRACT_32BITS(&bp->key_id)));
+	} else if (length == NTP_MSG_MINLEN + 4 + 16) { 	/* Optional: key-id + 128-bit digest */
 		ND_TCHECK(bp->key_id);
-		ND_PRINT((ndo, "\n\tKey id: %u", bp->key_id));
-		ND_TCHECK2(bp->message_digest, sizeof (bp->message_digest));
+		ND_PRINT((ndo, "\n\tKey id: %u", EXTRACT_32BITS(&bp->key_id)));
+		ND_TCHECK2(bp->message_digest, 16);
                 ND_PRINT((ndo, "\n\tAuthentication: %08x%08x%08x%08x",
         		       EXTRACT_32BITS(bp->message_digest),
 		               EXTRACT_32BITS(bp->message_digest + 4),
 		               EXTRACT_32BITS(bp->message_digest + 8),
 		               EXTRACT_32BITS(bp->message_digest + 12)));
-        }
+	} else if (length == NTP_MSG_MINLEN + 4 + 20) { 	/* Optional: key-id + 160-bit digest */
+		ND_TCHECK(bp->key_id);
+		ND_PRINT((ndo, "\n\tKey id: %u", EXTRACT_32BITS(&bp->key_id)));
+		ND_TCHECK2(bp->message_digest, 20);
+		ND_PRINT((ndo, "\n\tAuthentication: %08x%08x%08x%08x%08x",
+		               EXTRACT_32BITS(bp->message_digest),
+		               EXTRACT_32BITS(bp->message_digest + 4),
+		               EXTRACT_32BITS(bp->message_digest + 8),
+		               EXTRACT_32BITS(bp->message_digest + 12),
+		               EXTRACT_32BITS(bp->message_digest + 16)));
+	} else if (length > NTP_MSG_MINLEN) {
+		ND_PRINT((ndo, "\n\t(%u more bytes after the header)", length - NTP_MSG_MINLEN));
+	}
+	return;
+
+invalid:
+	ND_PRINT((ndo, " %s", istr));
+	ND_TCHECK2(*cp, length);
 	return;
 
 trunc:
@@ -358,15 +395,16 @@ p_ntp_time(netdissect_options *ndo,
 
 #ifdef HAVE_STRFTIME
 	/*
-	 * print the time in human-readable format.
+	 * print the UTC time in human-readable format.
 	 */
 	if (i) {
 	    time_t seconds = i - JAN_1970;
 	    struct tm *tm;
 	    char time_buf[128];
 
-	    tm = localtime(&seconds);
-	    strftime(time_buf, sizeof (time_buf), "%Y/%m/%d %H:%M:%S", tm);
+	    tm = gmtime(&seconds);
+	    /* use ISO 8601 (RFC3339) format */
+	    strftime(time_buf, sizeof (time_buf), "%Y-%m-%dT%H:%M:%S", tm);
 	    ND_PRINT((ndo, " (%s)", time_buf));
 	}
 #endif
@@ -423,5 +461,19 @@ p_ntp_delta(netdissect_options *ndo,
 	ff = ff / FMAXINT;			/* shift radix point by 32 bits */
 	f = (uint32_t)(ff * 1000000000.0);	/* treat fraction as parts per billion */
 	ND_PRINT((ndo, "%s%d.%09d", signbit ? "-" : "+", i, f));
+}
+
+/* Prints polling interval in log2 as seconds or fraction of second */
+static void
+p_poll(netdissect_options *ndo,
+       register const int poll)
+{
+	if (poll <= -32 || poll >= 32)
+		return;
+
+	if (poll >= 0)
+		ND_PRINT((ndo, " (%us)", 1U << poll));
+	else
+		ND_PRINT((ndo, " (1/%us)", 1U << -poll));
 }
 
