@@ -278,7 +278,7 @@ static const struct optlv_h OPTLV_msg[F_OP_MAX + 1] = {
 
 static inline const struct optlv_h *get_forces_optlv_h(uint16_t opt)
 {
-	if (opt > F_OP_MAX || opt <= F_OP_RSV)
+	if (opt > F_OP_MAX || opt == F_OP_RSV)
 		return &OPTLV_msg[F_OP_RSV];
 
 	return &OPTLV_msg[opt];
@@ -313,12 +313,10 @@ static inline char *indent_pr(int indent, int nlpref)
 
 static inline int op_valid(uint16_t op, uint16_t mask)
 {
-	int opb = 1 << (op - 1);
-
 	if (op == 0)
 		return 0;
-	if (opb & mask)
-		return 1;
+	if (op <= F_OP_MAX)
+		return (1 << (op - 1)) & mask; /* works only for 0x0001 through 0x0010 */
 	/* I guess we should allow vendor operations? */
 	if (op >= 0x8000)
 		return 1;
