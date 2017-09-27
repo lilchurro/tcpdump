@@ -87,7 +87,7 @@ The Regents of the University of California.  All rights reserved.\n";
 #include <sys/nv.h>
 #endif	/* HAVE_CASPER */
 #endif	/* HAVE_CAPSICUM */
-#include <arpa/inet.h>
+/* #include <arpa/inet.h> */
 #include <pcap.h>
 #include <signal.h>
 #include <stdio.h>
