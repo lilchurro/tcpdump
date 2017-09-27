@@ -18,7 +18,7 @@ my $r, $out;
 
 if ($^O eq 'MSWin32') {
     $r = system "..\\windump -n -t -r $input $options -w NEW/$outfile 2>NUL | sed 's/\\r//' | tee NEW/$output | diff $output - >DIFF/$output.diff";
-    $out = system "fc /b NEW/$outfile $outfile"
+    $out = system "diff NEW/$outfile $outfile >DIFF/$outfile.diff"
     # check the above in a windows box
 } else {
     $r = system "../tcpdump 2>/dev/null -n -t -r $input $options -w NEW/$outfile >NEW/$output";
