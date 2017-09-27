@@ -143,7 +143,7 @@ struct netdissect_options {
   int ndo_bflag;		/* print 4 byte ASes in ASDOT notation */
   int ndo_eflag;		/* print ethernet header */
   int ndo_fflag;		/* don't translate "foreign" IP address */
-  int ndo_Kflag;		/* don't check TCP checksums */
+  int ndo_Kflag;		/* don't check IP, TCP or UDP checksums */
   int ndo_nflag;		/* leave addresses as numbers */
   int ndo_Nflag;		/* remove domains from printed host names */
   int ndo_qflag;		/* quick (shorter) output */
@@ -512,7 +512,7 @@ extern void ipx_netbios_print(netdissect_options *, const u_char *, u_int);
 extern void ipx_print(netdissect_options *, const u_char *, u_int);
 extern void isakmp_print(netdissect_options *, const u_char *, u_int, const u_char *);
 extern void isakmp_rfc3948_print(netdissect_options *, const u_char *, u_int, const u_char *);
-extern void isoclns_print(netdissect_options *, const u_char *, u_int, u_int);
+extern void isoclns_print(netdissect_options *, const u_char *, u_int);
 extern void krb_print(netdissect_options *, const u_char *);
 extern void l2tp_print(netdissect_options *, const u_char *, u_int);
 extern void lane_print(netdissect_options *, const u_char *, u_int, u_int);
