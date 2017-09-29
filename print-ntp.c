@@ -38,6 +38,8 @@
 #include "addrtoname.h"
 #include "extract.h"
 
+static const char tstr[] = " [|ntp]";
+
 /*
  * Based on ntp.h from the U of MD implementation
  *	This file is based on Version 2 of the NTP spec (RFC1119).
@@ -66,13 +68,13 @@
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 struct l_fixedpt {
-	uint32_t int_part;
-	uint32_t fraction;
+	nd_uint32_t int_part;
+	nd_uint32_t fraction;
 };
 
 struct s_fixedpt {
-	uint16_t int_part;
-	uint16_t fraction;
+	nd_uint16_t int_part;
+	nd_uint16_t fraction;
 };
 
 /* rfc2030
@@ -113,26 +115,26 @@ struct s_fixedpt {
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  */
 
-/* Length of the NTP message with the mandatory fields ("the header")
+/* Length of the NTP data message with the mandatory fields ("the header")
  * and without any optional fields (extension, Key Identifier,
  * Message Digest).
  */
-#define NTP_MSG_MINLEN 48
+#define NTP_TIMEMSG_MINLEN 48U
 
-struct ntpdata {
-	u_char status;		/* status of local clock and leap info */
-	u_char stratum;		/* Stratum level */
-	int ppoll:8;		/* poll value */
-	int precision:8;
+struct ntp_time_data {
+	nd_uint8_t status;		/* status of local clock and leap info */
+	nd_uint8_t stratum;		/* Stratum level */
+	nd_int8_t ppoll;		/* poll value */
+	nd_int8_t precision;
 	struct s_fixedpt root_delay;
 	struct s_fixedpt root_dispersion;
-	uint32_t refid;
+	nd_uint32_t refid;
 	struct l_fixedpt ref_timestamp;
 	struct l_fixedpt org_timestamp;
 	struct l_fixedpt rec_timestamp;
 	struct l_fixedpt xmt_timestamp;
-        uint32_t key_id;
-        uint8_t  message_digest[20];
+	nd_uint32_t key_id;
+	nd_uint8_t  message_digest[20];
 };
 /*
  *	Leap Second Codes (high order two bits)
@@ -207,22 +209,57 @@ static const struct tok ntp_stratum_values[] = {
 	{ 0, NULL }
 };
 
-/*
- * Print ntp requests
+/* draft-ietf-ntp-mode-6-cmds-02
+ *  0                   1                   2                   3
+ *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |LI |  VN |Mode |R|E|M| OpCode  |       Sequence Number         |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |            Status             |       Association ID          |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |            Offset             |            Count              |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                                                               |
+ * /                    Data (up to 468 bytes)                     /
+ * |                                                               |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                    Padding (optional)                         |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                                                               |
+ * /              Authenticator (optional, 96 bytes)               /
+ * |                                                               |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *               Figure 1: NTP Control Message Header
  */
-void
-ntp_print(netdissect_options *ndo,
-          register const u_char *cp, u_int length)
+
+/* Length of the NTP control message with the mandatory fields ("the header")
+ * and without any optional fields (Data, Padding, Authenticator).
+ */
+#define NTP_CTRLMSG_MINLEN 12U
+
+struct ntp_control_data {
+	nd_uint8_t	magic;		/* LI, VN, Mode */
+	nd_uint8_t	control;	/* R, E, M, OpCode */
+	nd_uint16_t	sequence;	/* Sequence Number */
+	nd_uint16_t	status;		/* Status */
+	nd_uint16_t	assoc;		/* Association ID */
+	nd_uint16_t	offset;		/* Offset */
+	nd_uint16_t	count;		/* Count */
+	nd_uint8_t	data[564];	/* Data, [Padding, [Authenticator]] */
+};
+
+/*
+ * Print NTP time requests and responses
+ */
+static void
+ntp_time_print(netdissect_options *ndo,
+	       register const struct ntp_time_data *bp, u_int length)
 {
-	register const struct ntpdata *bp;
 	int mode, version, leapind;
 
-	if (length < NTP_MSG_MINLEN) {
-		ND_PRINT((ndo, "NTP, length %u", length));
+	if (length < NTP_TIMEMSG_MINLEN)
 		goto invalid;
-	}
-
-	bp = (const struct ntpdata *)cp;
 
 	ND_TCHECK(bp->status);
 
@@ -251,13 +288,11 @@ ntp_print(netdissect_options *ndo,
 		bp->stratum,
 		tok2str(ntp_stratum_values, (bp->stratum >=2 && bp->stratum<=15) ? "secondary reference" : "reserved", bp->stratum)));
 
-	/* Can't ND_TCHECK bp->ppoll bitfield so bp->stratum + 2 instead */
-	ND_TCHECK2(bp->stratum, 2);
+	ND_TCHECK(bp->ppoll);
 	ND_PRINT((ndo, ", poll %d", bp->ppoll));
 	p_poll(ndo, bp->ppoll);
 
-	/* Can't ND_TCHECK bp->precision bitfield so bp->distance + 0 instead */
-	ND_TCHECK2(bp->root_delay, 0);
+	ND_TCHECK(bp->precision);
 	ND_PRINT((ndo, ", precision %d", bp->precision));
 
 	ND_TCHECK(bp->root_delay);
@@ -322,10 +357,10 @@ ntp_print(netdissect_options *ndo,
 	p_ntp_delta(ndo, &(bp->org_timestamp), &(bp->xmt_timestamp));
 
 	/* FIXME: this code is not aware of any extension fields */
-	if (length == NTP_MSG_MINLEN + 4) { 	/* Optional: key-id (crypto-NAK) */
+	if (length == NTP_TIMEMSG_MINLEN + 4) { 	/* Optional: key-id (crypto-NAK) */
 		ND_TCHECK(bp->key_id);
 		ND_PRINT((ndo, "\n\tKey id: %u", EXTRACT_32BITS(&bp->key_id)));
-	} else if (length == NTP_MSG_MINLEN + 4 + 16) { 	/* Optional: key-id + 128-bit digest */
+	} else if (length == NTP_TIMEMSG_MINLEN + 4 + 16) { 	/* Optional: key-id + 128-bit digest */
 		ND_TCHECK(bp->key_id);
 		ND_PRINT((ndo, "\n\tKey id: %u", EXTRACT_32BITS(&bp->key_id)));
 		ND_TCHECK2(bp->message_digest, 16);
@@ -334,7 +369,7 @@ ntp_print(netdissect_options *ndo,
 		               EXTRACT_32BITS(bp->message_digest + 4),
 		               EXTRACT_32BITS(bp->message_digest + 8),
 		               EXTRACT_32BITS(bp->message_digest + 12)));
-	} else if (length == NTP_MSG_MINLEN + 4 + 20) { 	/* Optional: key-id + 160-bit digest */
+	} else if (length == NTP_TIMEMSG_MINLEN + 4 + 20) { 	/* Optional: key-id + 160-bit digest */
 		ND_TCHECK(bp->key_id);
 		ND_PRINT((ndo, "\n\tKey id: %u", EXTRACT_32BITS(&bp->key_id)));
 		ND_TCHECK2(bp->message_digest, 20);
@@ -344,18 +379,126 @@ ntp_print(netdissect_options *ndo,
 		               EXTRACT_32BITS(bp->message_digest + 8),
 		               EXTRACT_32BITS(bp->message_digest + 12),
 		               EXTRACT_32BITS(bp->message_digest + 16)));
-	} else if (length > NTP_MSG_MINLEN) {
-		ND_PRINT((ndo, "\n\t(%u more bytes after the header)", length - NTP_MSG_MINLEN));
+	} else if (length > NTP_TIMEMSG_MINLEN) {
+		ND_PRINT((ndo, "\n\t(%u more bytes after the header)", length - NTP_TIMEMSG_MINLEN));
 	}
 	return;
 
 invalid:
 	ND_PRINT((ndo, " %s", istr));
-	ND_TCHECK2(*cp, length);
+	ND_TCHECK2(*bp, length);
 	return;
 
 trunc:
-	ND_PRINT((ndo, " [|ntp]"));
+	ND_PRINT((ndo, " %s", tstr));
+}
+
+/*
+ * Print NTP control message requests and responses
+ */
+static void
+ntp_control_print(netdissect_options *ndo,
+		  register const struct ntp_control_data *cd, u_int length)
+{
+	u_char R, E, M, opcode;
+	uint16_t sequence, status, assoc, offset, count;
+
+	if (length < NTP_CTRLMSG_MINLEN)
+		goto invalid;
+
+	ND_TCHECK(cd->control);
+	R = (cd->control & 0x80) != 0;
+	E = (cd->control & 0x40) != 0;
+	M = (cd->control & 0x20) != 0;
+	opcode = cd->control & 0x1f;
+	ND_PRINT((ndo, ", %s, %s, %s, OpCode=%u\n",
+		  R ? "Response" : "Request", E ? "Error" : "OK",
+		  M ? "More" : "Last", (unsigned)opcode));
+
+	ND_TCHECK(cd->sequence);
+	sequence = EXTRACT_16BITS(&cd->sequence);
+	ND_PRINT((ndo, "\tSequence=%hu", sequence));
+
+	ND_TCHECK(cd->status);
+	status = EXTRACT_16BITS(&cd->status);
+	ND_PRINT((ndo, ", Status=%#hx", status));
+
+	ND_TCHECK(cd->assoc);
+	assoc = EXTRACT_16BITS(&cd->assoc);
+	ND_PRINT((ndo, ", Assoc.=%hu", assoc));
+
+	ND_TCHECK(cd->offset);
+	offset = EXTRACT_16BITS(&cd->offset);
+	ND_PRINT((ndo, ", Offset=%hu", offset));
+
+	ND_TCHECK(cd->count);
+	count = EXTRACT_16BITS(&cd->count);
+	ND_PRINT((ndo, ", Count=%hu", count));
+
+	if (NTP_CTRLMSG_MINLEN + count > length)
+		goto invalid;
+	if (count != 0) {
+		ND_TCHECK2(cd->data, count);
+		ND_PRINT((ndo, "\n\tTO-BE-DONE: data not interpreted"));
+	}
+	return;
+
+invalid:
+	ND_PRINT((ndo, " %s", istr));
+	ND_TCHECK2(*cd, length);
+	return;
+
+trunc:
+	ND_PRINT((ndo, " %s", tstr));
+}
+
+union ntpdata {
+	struct ntp_time_data	td;
+	struct ntp_control_data	cd;
+};
+
+/*
+ * Print NTP requests, handling the common VN, LI, and Mode
+ */
+void
+ntp_print(netdissect_options *ndo,
+          register const u_char *cp, u_int length)
+{
+	register const union ntpdata *bp = (const union ntpdata *)cp;
+	int mode, version, leapind;
+
+	ND_TCHECK(bp->td.status);
+
+	version = (bp->td.status & VERSIONMASK) >> VERSIONSHIFT;
+	ND_PRINT((ndo, "NTPv%d", version));
+
+	mode = (bp->td.status & MODEMASK) >> MODESHIFT;
+	if (!ndo->ndo_vflag) {
+		ND_PRINT((ndo, ", %s, length %u",
+		          tok2str(ntp_mode_values, "Unknown mode", mode),
+		          length));
+		return;
+	}
+
+	ND_PRINT((ndo, ", %s, length %u\n",
+	          tok2str(ntp_mode_values, "Unknown mode", mode), length));
+
+	/* leapind = (bp->td.status & LEAPMASK) >> LEAPSHIFT; */
+	leapind = (bp->td.status & LEAPMASK);
+	ND_PRINT((ndo, "\tLeap indicator: %s (%u)",
+	          tok2str(ntp_leapind_values, "Unknown", leapind),
+	          leapind));
+
+	if (mode >= MODE_UNSPEC && mode <= MODE_BROADCAST)
+		ntp_time_print(ndo, &bp->td, length);
+	else if (mode == MODE_CONTROL)
+		ntp_control_print(ndo, &bp->cd, length);
+	else
+		{;}			/* XXX: not implemented! */
+	return;
+
+trunc:
+	ND_PRINT((ndo, " %s", tstr));
 }
 
 static void
@@ -466,14 +609,14 @@ p_ntp_delta(netdissect_options *ndo,
 /* Prints polling interval in log2 as seconds or fraction of second */
 static void
 p_poll(netdissect_options *ndo,
-       register const int poll)
+       register const int poll_interval)
 {
-	if (poll <= -32 || poll >= 32)
+	if (poll_interval <= -32 || poll_interval >= 32)
 		return;
 
-	if (poll >= 0)
-		ND_PRINT((ndo, " (%us)", 1U << poll));
+	if (poll_interval >= 0)
+		ND_PRINT((ndo, " (%us)", 1U << poll_interval));
 	else
-		ND_PRINT((ndo, " (1/%us)", 1U << -poll));
+		ND_PRINT((ndo, " (1/%us)", 1U << -poll_interval));
 }
 
