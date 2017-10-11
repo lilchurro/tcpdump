@@ -523,8 +523,9 @@ static char *
 bittok2str_internal(register const struct tok *lp, register const char *fmt,
 	   register u_int v, const char *sep)
 {
-        static char buf[256]; /* our stringbuffer */
-        int buflen=0;
+        static char buf[1024+1]; /* our string buffer */
+        char *bufp = buf;
+        size_t space_left = sizeof(buf), string_size;
         register u_int rotbit; /* this is the bit we rotate through all bitpositions */
         register u_int tokval;
         const char * sepstr = "";
@@ -539,8 +540,20 @@ bittok2str_internal(register const struct tok *lp, register const char *fmt,
                  */
 		if (tokval == (v&rotbit)) {
                     /* ok we have found something */
-                    buflen+=snprintf(buf+buflen, sizeof(buf)-buflen, "%s%s",
-                                     sepstr, lp->s);
+                    if (space_left <= 1)
+                        return (buf); /* only enough room left for NUL, if that */
+                    string_size = strlcpy(bufp, sepstr, space_left);
+                    if (string_size >= space_left)
+                        return (buf);    /* we ran out of room */
+                    bufp += string_size;
+                    space_left -= string_size;
+                    if (space_left <= 1)
+                        return (buf); /* only enough room left for NUL, if that */
+                    string_size = strlcpy(bufp, lp->s, space_left);
+                    if (string_size >= space_left)
+                        return (buf);    /* we ran out of room */
+                    bufp += string_size;
+                    space_left -= string_size;
                     sepstr = sep;
                     break;
                 }
@@ -549,7 +562,7 @@ bittok2str_internal(register const struct tok *lp, register const char *fmt,
             lp++;
 	}
 
-        if (buflen == 0)
+        if (bufp == buf)
             /* bummer - lets print the "unknown" message as advised in the fmt string if we got one */
             (void)snprintf(buf, sizeof(buf), fmt == NULL ? "#%08x" : fmt, v);
         return (buf);
@@ -814,14 +827,21 @@ txtproto_print(netdissect_options *ndo, const u_char *pptr, u_int len,
 	u_int idx, eol;
 	u_char token[MAX_TOKEN+1];
 	const char *cmd;
-	int is_reqresp = 0;
+	int print_this = 0;
 	const char *pnp;
 
 	if (cmds != NULL) {
 		/*
 		 * This protocol has more than just request and
 		 * response lines; see whether this looks like a
-		 * request or response.
+		 * request or response and, if so, print it and,
+		 * in verbose mode, print everything after it.
+		 *
+		 * This is for HTTP-like protocols, where we
+		 * want to print requests and responses, but
+		 * don't want to print continuations of request
+		 * or response bodies in packets that don't
+		 * contain the request or response line.
 		 */
 		idx = fetch_token(ndo, pptr, 0, len, token, sizeof(token));
 		if (idx != 0) {
@@ -829,7 +849,7 @@ txtproto_print(netdissect_options *ndo, const u_char *pptr, u_int len,
 			while ((cmd = *cmds++) != NULL) {
 				if (ascii_strcasecmp((const char *)token, cmd) == 0) {
 					/* Yes. */
-					is_reqresp = 1;
+					print_this = 1;
 					break;
 				}
 			}
@@ -851,28 +871,36 @@ txtproto_print(netdissect_options *ndo, const u_char *pptr, u_int len,
 				if (isdigit(token[0]) && isdigit(token[1]) &&
 				    isdigit(token[2]) && token[3] == '\0') {
 					/* Yes. */
-					is_reqresp = 1;
+					print_this = 1;
 				}
 			}
 		}
 	} else {
 		/*
-		 * This protocol has only request and response lines
-		 * (e.g., FTP, where all the data goes over a
-		 * different connection); assume the payload is
-		 * a request or response.
+		 * Either:
+		 *
+		 * 1) This protocol has only request and response lines
+		 *    (e.g., FTP, where all the data goes over a different
+		 *    connection); assume the payload is a request or
+		 *    response.
+		 *
+		 * or
+		 *
+		 * 2) This protocol is just text, so that we should
+		 *    always, at minimum, print the first line and,
+		 *    in verbose mode, print all lines.
 		 */
-		is_reqresp = 1;
+		print_this = 1;
 	}
 
 	/* Capitalize the protocol name */
 	for (pnp = protoname; *pnp != '\0'; pnp++)
 		ND_PRINT((ndo, "%c", toupper((u_char)*pnp)));
 
-	if (is_reqresp) {
+	if (print_this) {
 		/*
 		 * In non-verbose mode, just print the protocol, followed
-		 * by the first line as the request or response info.
+		 * by the first line.
 		 *
 		 * In verbose mode, print lines as text until we run out
 		 * of characters or see something that's not a
