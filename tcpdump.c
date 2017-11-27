@@ -87,13 +87,9 @@ The Regents of the University of California.  All rights reserved.\n";
 #include <sys/nv.h>
 #endif	/* HAVE_CASPER */
 #endif	/* HAVE_CAPSICUM */
-<<<<<<< HEAD
-/* #include <arpa/inet.h> */
-=======
 #ifdef HAVE_PCAP_OPEN
 #define HAVE_REMOTE
 #endif
->>>>>>> upstream/master
 #include <pcap.h>
 #include <signal.h>
 #include <stdio.h>
@@ -269,11 +265,8 @@ struct dump_info {
 	char	*CurrentFileName;
 	pcap_t	*pd;
 	pcap_dumper_t *p;
-<<<<<<< HEAD
 	char    *maskIP;
-=======
 	netdissect_options *ndo;
->>>>>>> upstream/master
 #ifdef HAVE_CAPSICUM
 	int	dirfd;
 #endif
@@ -584,17 +577,7 @@ show_remote_devices_and_exit(void)
 #define U_FLAG
 #endif
 
-<<<<<<< HEAD
-#ifdef HAVE_PCAP_SETDIRECTION
-#define Q_FLAG "Q:"
-#else
-#define Q_FLAG
-#endif
-
 #define SHORTOPTS "0aAb" B_FLAG "c:C:d" D_FLAG "eE:fF:G:hHi:" I_FLAG j_FLAG J_FLAG "KlLm:M:nNOpq" Q_FLAG "r:s:StT:u" U_FLAG "vV:w:W:xXy:Yz:Z:#*:"
-=======
-#define SHORTOPTS "aAb" B_FLAG "c:C:d" D_FLAG "eE:fF:G:hHi:" I_FLAG j_FLAG J_FLAG "KlLm:M:nNOpq" Q_FLAG "r:s:StT:u" U_FLAG "vV:w:W:xXy:Yz:Z:#"
->>>>>>> upstream/master
 
 /*
  * Long options.
@@ -2839,16 +2822,12 @@ static void
 dump_packet(u_char *user, const struct pcap_pkthdr *h, const u_char *sp)
 {
 	struct dump_info *dump_info;
-<<<<<<< HEAD
-=======
 
->>>>>>> upstream/master
 	++packets_captured;
 	++infodelay;
 
 	dump_info = (struct dump_info *)user;
 
-<<<<<<< HEAD
 	/* CyberReboot dump insert: */
 	if (no_payload > 0 || mask_external_ip > 0) {
 		if (pcap_datalink(dump_info->pd) != DLT_EN10MB) {
@@ -2864,13 +2843,7 @@ dump_packet(u_char *user, const struct pcap_pkthdr *h, const u_char *sp)
 
 #ifdef HAVE_PCAP_DUMP_FLUSH
 	if (Uflag)
-		pcap_dump_flush((pcap_dumper_t *)dump_info->p);
-=======
-	pcap_dump((u_char *)dump_info->p, h, sp);
-#ifdef HAVE_PCAP_DUMP_FLUSH
-	if (Uflag)
 		pcap_dump_flush(dump_info->p);
->>>>>>> upstream/master
 #endif
 
 	if (dump_info->ndo != NULL)
