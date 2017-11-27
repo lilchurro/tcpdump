@@ -70,11 +70,11 @@ ip_printroute(netdissect_options *ndo,
 	ND_TCHECK(cp[2]);
 	ptr = cp[2] - 1;
 	if (ptr < 3 || ((ptr + 1) & 3) || ptr > length + 1)
-		ND_PRINT((ndo, " [bad ptr %u]", cp[2]));
+		ND_PRINT((ndo, " [bad ptr %u]", EXTRACT_U_1(cp + 2)));
 
 	for (len = 3; len < length; len += 4) {
-		ND_TCHECK2(cp[len], 4);
-		ND_PRINT((ndo, " %s", ipaddr_string(ndo, &cp[len])));
+		ND_TCHECK_4(cp + len);
+		ND_PRINT((ndo, " %s", ipaddr_string(ndo, cp + len)));
 		if (ptr > len)
 			ND_PRINT((ndo, ","));
 	}
@@ -189,7 +189,7 @@ ip_printts(netdissect_options *ndo,
 	ptr = cp[2] - 1;
 	len = 0;
 	if (ptr < 4 || ((ptr - 4) & (hoplen-1)) || ptr > length + 1)
-		ND_PRINT((ndo, "[bad ptr %u]", cp[2]));
+		ND_PRINT((ndo, "[bad ptr %u]", EXTRACT_U_1(cp + 2)));
 	ND_TCHECK(cp[3]);
 	switch (cp[3]&0xF) {
 	case IPOPT_TS_TSONLY:
@@ -211,7 +211,7 @@ ip_printts(netdissect_options *ndo,
 		ND_PRINT((ndo, "PRESPEC"));
 		break;
 	default:
-		ND_PRINT((ndo, "[bad ts type %d]", cp[3]&0xF));
+		ND_PRINT((ndo, "[bad ts type %d]", EXTRACT_U_1(cp + 3)&0xF));
 		goto done;
 	}
 
@@ -220,8 +220,8 @@ ip_printts(netdissect_options *ndo,
 		if (ptr == len)
 			type = " ^ ";
 		ND_TCHECK2(cp[len], hoplen);
-		ND_PRINT((ndo, "%s%d@%s", type, EXTRACT_32BITS(&cp[len+hoplen-4]),
-		       hoplen!=8 ? "" : ipaddr_string(ndo, &cp[len])));
+		ND_PRINT((ndo, "%s%d@%s", type, EXTRACT_BE_U_4(cp + len + hoplen - 4),
+			  hoplen!=8 ? "" : ipaddr_string(ndo, cp + len)));
 		type = " ";
 	}
 
@@ -229,7 +229,7 @@ done:
 	ND_PRINT((ndo, "%s", ptr == len ? " ^ " : ""));
 
 	if (cp[3]>>4)
-		ND_PRINT((ndo, " [%d hops not recorded]} ", cp[3]>>4));
+		ND_PRINT((ndo, " [%d hops not recorded]} ", EXTRACT_U_1(cp + 3)>>4));
 	else
 		ND_PRINT((ndo, "}"));
 	return (0);
@@ -302,8 +302,8 @@ ip_optprint(netdissect_options *ndo,
 				break;
 			}
 			ND_TCHECK(cp[3]);
-			if (EXTRACT_16BITS(&cp[2]) != 0)
-				ND_PRINT((ndo, " value %u", EXTRACT_16BITS(&cp[2])));
+			if (EXTRACT_BE_U_2(cp + 2) != 0)
+				ND_PRINT((ndo, " value %u", EXTRACT_BE_U_2(cp + 2)));
 			break;
 
 		case IPOPT_NOP:       /* nothing to print - fall through */
@@ -359,7 +359,7 @@ again:
 
 	case IPPROTO_ESP:
 	{
-		int enh, padlen;
+		u_int enh, padlen;
 		ipds->advance = esp_print(ndo, ipds->cp, ipds->len,
 				    (const u_char *)ipds->ip,
 				    &enh, &padlen);
@@ -566,7 +566,7 @@ ip_print(netdissect_options *ndo,
 		return;
 	}
 
-	ipds->len = EXTRACT_16BITS(&ipds->ip->ip_len);
+	ipds->len = EXTRACT_BE_U_2(&ipds->ip->ip_len);
 	if (length < ipds->len)
 		ND_PRINT((ndo, "truncated-ip - %u bytes missing! ",
 			ipds->len - length));
@@ -595,10 +595,10 @@ ip_print(netdissect_options *ndo,
 
 	ipds->len -= hlen;
 
-	ipds->off = EXTRACT_16BITS(&ipds->ip->ip_off);
+	ipds->off = EXTRACT_BE_U_2(&ipds->ip->ip_off);
 
         if (ndo->ndo_vflag) {
-            ND_PRINT((ndo, "(tos 0x%x", (int)ipds->ip->ip_tos));
+            ND_PRINT((ndo, "(tos 0x%x", ipds->ip->ip_tos));
             /* ECN bits */
             switch (ipds->ip->ip_tos & 0x03) {
 
@@ -628,13 +628,13 @@ ip_print(netdissect_options *ndo,
 	     */
 
 	    ND_PRINT((ndo, ", id %u, offset %u, flags [%s], proto %s (%u)",
-                         EXTRACT_16BITS(&ipds->ip->ip_id),
+                         EXTRACT_BE_U_2(&ipds->ip->ip_id),
                          (ipds->off & 0x1fff) * 8,
                          bittok2str(ip_frag_values, "none", ipds->off&0xe000),
                          tok2str(ipproto_values,"unknown",ipds->ip->ip_p),
                          ipds->ip->ip_p));
 
-            ND_PRINT((ndo, ", length %u", EXTRACT_16BITS(&ipds->ip->ip_len)));
+            ND_PRINT((ndo, ", length %u", EXTRACT_BE_U_2(&ipds->ip->ip_len)));
 
             if ((hlen - sizeof(struct ip)) > 0) {
                 ND_PRINT((ndo, ", options ("));
@@ -647,7 +647,7 @@ ip_print(netdissect_options *ndo,
 	        vec[0].len = hlen;
 	        sum = in_cksum(vec, 1);
 		if (sum != 0) {
-		    ip_sum = EXTRACT_16BITS(&ipds->ip->ip_sum);
+		    ip_sum = EXTRACT_BE_U_2(&ipds->ip->ip_sum);
 		    ND_PRINT((ndo, ", bad cksum %x (->%x)!", ip_sum,
 			     in_cksum_shouldbe(ip_sum, sum)));
 		}
@@ -715,7 +715,7 @@ ipN_print(netdissect_options *ndo, register const u_char *bp, register u_int len
 		ip6_print (ndo, bp, length);
 		break;
 	default:
-		ND_PRINT((ndo, "unknown ip %d", (*bp & 0xF0) >> 4));
+		ND_PRINT((ndo, "unknown ip %d", (EXTRACT_U_1(bp) & 0xF0) >> 4));
 		break;
 	}
 	return;

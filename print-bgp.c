@@ -106,13 +106,13 @@ struct bgp_route_refresh {
     uint8_t  afi[2]; /* the compiler messes this structure up               */
     uint8_t  res;    /* when doing misaligned sequences of int8 and int16   */
     uint8_t  safi;   /* afi should be int16 - so we have to access it using */
-};                    /* EXTRACT_16BITS(&bgp_route_refresh->afi) (sigh)      */
+};                    /* EXTRACT_BE_U_2(&bgp_route_refresh->afi) (sigh)      */
 #define BGP_ROUTE_REFRESH_SIZE          23
 
 #define bgp_attr_lenlen(flags, p) \
 	(((flags) & 0x10) ? 2 : 1)
 #define bgp_attr_len(flags, p) \
-	(((flags) & 0x10) ? EXTRACT_16BITS(p) : *(p))
+	(((flags) & 0x10) ? EXTRACT_BE_U_2(p) : *(p))
 
 #define BGPTYPE_ORIGIN			1
 #define BGPTYPE_AS_PATH			2
@@ -572,7 +572,7 @@ decode_labeled_prefix4(netdissect_options *ndo,
 	u_int plen, plenbytes;
 
 	/* prefix length and label = 4 bytes */
-	ND_TCHECK2(pptr[0], 4);
+	ND_TCHECK_4(pptr);
 	ITEMCHECK(4);
 	plen = pptr[0];   /* get prefix length */
 
@@ -606,7 +606,7 @@ decode_labeled_prefix4(netdissect_options *ndo,
 	snprintf(buf, buflen, "%s/%d, label:%u %s",
                  ipaddr_string(ndo, &addr),
                  plen,
-                 EXTRACT_24BITS(pptr+1)>>4,
+                 EXTRACT_BE_U_3(pptr + 1)>>4,
                  ((pptr[3]&1)==0) ? "(BOGUS: Bottom of Stack NOT set!)" : "(bottom)" );
 
 	return 4 + plenbytes;
@@ -680,8 +680,9 @@ bgp_vpn_sg_print(netdissect_options *ndo,
     total_length = 0;
 
     /* Source address length, encoded in bits */
-    ND_TCHECK2(pptr[0], 1);
-    addr_length =  *pptr++;
+    ND_TCHECK_1(pptr);
+    addr_length = EXTRACT_U_1(pptr);
+    pptr++;
 
     /* Source address */
     ND_TCHECK2(pptr[0], (addr_length >> 3));
@@ -694,8 +695,9 @@ bgp_vpn_sg_print(netdissect_options *ndo,
     }
 
     /* Group address length, encoded in bits */
-    ND_TCHECK2(pptr[0], 1);
-    addr_length =  *pptr++;
+    ND_TCHECK_1(pptr);
+    addr_length = EXTRACT_U_1(pptr);
+    pptr++;
 
     /* Group address */
     ND_TCHECK2(pptr[0], (addr_length >> 3));
@@ -723,28 +725,29 @@ bgp_vpn_rd_print(netdissect_options *ndo,
     char *pos = rd;
 
     /* ok lets load the RD format */
-    switch (EXTRACT_16BITS(pptr)) {
+    switch (EXTRACT_BE_U_2(pptr)) {
 
         /* 2-byte-AS:number fmt*/
     case 0:
         snprintf(pos, sizeof(rd) - (pos - rd), "%u:%u (= %u.%u.%u.%u)",
-                 EXTRACT_16BITS(pptr+2),
-                 EXTRACT_32BITS(pptr+4),
+                 EXTRACT_BE_U_2(pptr + 2),
+                 EXTRACT_BE_U_4(pptr + 4),
                  *(pptr+4), *(pptr+5), *(pptr+6), *(pptr+7));
         break;
         /* IP-address:AS fmt*/
 
     case 1:
         snprintf(pos, sizeof(rd) - (pos - rd), "%u.%u.%u.%u:%u",
-            *(pptr+2), *(pptr+3), *(pptr+4), *(pptr+5), EXTRACT_16BITS(pptr+6));
+            *(pptr+2), *(pptr+3), *(pptr+4), *(pptr+5),
+            EXTRACT_BE_U_2(pptr + 6));
         break;
 
         /* 4-byte-AS:number fmt*/
     case 2:
 	snprintf(pos, sizeof(rd) - (pos - rd), "%s:%u (%u.%u.%u.%u:%u)",
-	    as_printf(ndo, astostr, sizeof(astostr), EXTRACT_32BITS(pptr+2)),
-	    EXTRACT_16BITS(pptr+6), *(pptr+2), *(pptr+3), *(pptr+4),
-	    *(pptr+5), EXTRACT_16BITS(pptr+6));
+	    as_printf(ndo, astostr, sizeof(astostr), EXTRACT_BE_U_4(pptr + 2)),
+	    EXTRACT_BE_U_2(pptr + 6), *(pptr+2), *(pptr+3), *(pptr+4),
+	    *(pptr+5), EXTRACT_BE_U_2(pptr + 6));
         break;
     default:
         snprintf(pos, sizeof(rd) - (pos - rd), "unknown RD format");
@@ -781,8 +784,8 @@ decode_rt_routing_info(netdissect_options *ndo,
 		return -1;
 
 	/* With at least "origin AS", possibly with "route target". */
-	ND_TCHECK_32BITS(pptr + 1);
-	as_printf(ndo, asbuf, sizeof(asbuf), EXTRACT_32BITS(pptr + 1));
+	ND_TCHECK_4(pptr + 1);
+	as_printf(ndo, asbuf, sizeof(asbuf), EXTRACT_BE_U_4(pptr + 1));
 
         plen-=32; /* adjust prefix length */
 
@@ -841,7 +844,7 @@ decode_labeled_vpn_prefix4(netdissect_options *ndo,
                  bgp_vpn_rd_print(ndo, pptr+4),
                  ipaddr_string(ndo, &addr),
                  plen,
-                 EXTRACT_24BITS(pptr+1)>>4,
+                 EXTRACT_BE_U_3(pptr + 1)>>4,
                  ((pptr[3]&1)==0) ? "(BOGUS: Bottom of Stack NOT set!)" : "(bottom)" );
 
 	return 12 + (plen + 7) / 8;
@@ -873,12 +876,12 @@ decode_mdt_vpn_nlri(netdissect_options *ndo,
     ND_TCHECK(pptr[0]);
 
     /* if the NLRI is not predefined length, quit.*/
-    if (*pptr != MDT_VPN_NLRI_LEN * 8)
+    if (EXTRACT_U_1(pptr) != MDT_VPN_NLRI_LEN * 8)
 	return -1;
     pptr++;
 
     /* RD */
-    ND_TCHECK2(pptr[0], 8);
+    ND_TCHECK_8(pptr);
     rd = pptr;
     pptr+=8;
 
@@ -926,9 +929,11 @@ decode_multicast_vpn(netdissect_options *ndo,
         uint8_t route_type, route_length, addr_length, sg_length;
         u_int offset;
 
-	ND_TCHECK2(pptr[0], 2);
-        route_type = *pptr++;
-        route_length = *pptr++;
+	ND_TCHECK_2(pptr);
+        route_type = EXTRACT_U_1(pptr);
+        pptr++;
+        route_length = EXTRACT_U_1(pptr);
+        pptr++;
 
         snprintf(buf, buflen, "Route-Type: %s (%u), length: %u",
                  tok2str(bgp_multicast_vpn_route_type_values,
@@ -950,7 +955,7 @@ decode_multicast_vpn(netdissect_options *ndo,
 	    snprintf(buf + offset, buflen - offset, ", RD: %s, Source-AS %s",
 		bgp_vpn_rd_print(ndo, pptr),
 		as_printf(ndo, astostr, sizeof(astostr),
-		EXTRACT_32BITS(pptr + BGP_VPN_RD_LEN)));
+		EXTRACT_BE_U_4(pptr + BGP_VPN_RD_LEN)));
             break;
 
         case BGP_MULTICAST_VPN_ROUTE_TYPE_S_PMSI:
@@ -986,7 +991,7 @@ decode_multicast_vpn(netdissect_options *ndo,
 	    snprintf(buf + offset, buflen - offset, ", RD: %s, Source-AS %s",
 		bgp_vpn_rd_print(ndo, pptr),
 		as_printf(ndo, astostr, sizeof(astostr),
-		EXTRACT_32BITS(pptr + BGP_VPN_RD_LEN)));
+		EXTRACT_BE_U_4(pptr + BGP_VPN_RD_LEN)));
             pptr += BGP_VPN_RD_LEN + 4;
 
             bgp_vpn_sg_print(ndo, pptr, buf, buflen);
@@ -1032,8 +1037,8 @@ decode_labeled_vpn_l2(netdissect_options *ndo,
 {
         int plen,tlen,stringlen,tlv_type,tlv_len,ttlv_len;
 
-	ND_TCHECK2(pptr[0], 2);
-        plen=EXTRACT_16BITS(pptr);
+	ND_TCHECK_2(pptr);
+        plen=EXTRACT_BE_U_2(pptr);
         tlen=plen;
         pptr+=2;
 	/* Old and new L2VPN NLRI share AFI/SAFI
@@ -1060,9 +1065,9 @@ decode_labeled_vpn_l2(netdissect_options *ndo,
 	    buf[0]='\0';
 	    stringlen=snprintf(buf, buflen, "RD: %s, CE-ID: %u, Label-Block Offset: %u, Label Base %u",
 			       bgp_vpn_rd_print(ndo, pptr),
-			       EXTRACT_16BITS(pptr+8),
-			       EXTRACT_16BITS(pptr+10),
-			       EXTRACT_24BITS(pptr+12)>>4); /* the label is offsetted by 4 bits so lets shift it right */
+			       EXTRACT_BE_U_2(pptr + 8),
+			       EXTRACT_BE_U_2(pptr + 10),
+			       EXTRACT_BE_U_3(pptr + 12)>>4); /* the label is offsetted by 4 bits so lets shift it right */
 	    UPDATE_BUF_BUFLEN(buf, buflen, stringlen);
 	    pptr+=15;
 	    tlen-=15;
@@ -1071,9 +1076,10 @@ decode_labeled_vpn_l2(netdissect_options *ndo,
 	    while (tlen>0) {
 		if (tlen < 3)
 		    return -1;
-		ND_TCHECK2(pptr[0], 3);
-		tlv_type=*pptr++;
-		tlv_len=EXTRACT_16BITS(pptr);
+		ND_TCHECK_3(pptr);
+		tlv_type=EXTRACT_U_1(pptr);
+		pptr++;
+		tlv_len=EXTRACT_BE_U_2(pptr);
 		ttlv_len=tlv_len;
 		pptr+=2;
 
@@ -1089,7 +1095,9 @@ decode_labeled_vpn_l2(netdissect_options *ndo,
 		    while (ttlv_len>0) {
 			ND_TCHECK(pptr[0]);
 			if (buflen!=0) {
-			    stringlen=snprintf(buf,buflen, "%02x",*pptr++);
+			    stringlen=snprintf(buf,buflen, "%02x",
+                                               EXTRACT_U_1(pptr));
+			    pptr++;
 			    UPDATE_BUF_BUFLEN(buf, buflen, stringlen);
 			}
 			ttlv_len--;
@@ -1159,7 +1167,7 @@ decode_labeled_prefix6(netdissect_options *ndo,
 	u_int plen, plenbytes;
 
 	/* prefix length and label = 4 bytes */
-	ND_TCHECK2(pptr[0], 4);
+	ND_TCHECK_4(pptr);
 	ITEMCHECK(4);
 	plen = pptr[0]; /* get prefix length */
 
@@ -1184,7 +1192,7 @@ decode_labeled_prefix6(netdissect_options *ndo,
 	snprintf(buf, buflen, "%s/%d, label:%u %s",
                  ip6addr_string(ndo, &addr),
                  plen,
-                 EXTRACT_24BITS(pptr+1)>>4,
+                 EXTRACT_BE_U_3(pptr + 1)>>4,
                  ((pptr[3]&1)==0) ? "(BOGUS: Bottom of Stack NOT set!)" : "(bottom)" );
 
 	return 4 + plenbytes;
@@ -1226,7 +1234,7 @@ decode_labeled_vpn_prefix6(netdissect_options *ndo,
                  bgp_vpn_rd_print(ndo, pptr+4),
                  ip6addr_string(ndo, &addr),
                  plen,
-                 EXTRACT_24BITS(pptr+1)>>4,
+                 EXTRACT_BE_U_3(pptr + 1)>>4,
                  ((pptr[3]&1)==0) ? "(BOGUS: Bottom of Stack NOT set!)" : "(bottom)" );
 
 	return 12 + (plen + 7) / 8;
@@ -1295,7 +1303,7 @@ decode_labeled_vpn_clnp_prefix(netdissect_options *ndo,
                  bgp_vpn_rd_print(ndo, pptr+4),
                  isonsap_string(ndo, addr,(plen + 7) / 8),
                  plen,
-                 EXTRACT_24BITS(pptr+1)>>4,
+                 EXTRACT_BE_U_3(pptr + 1)>>4,
                  ((pptr[3]&1)==0) ? "(BOGUS: Bottom of Stack NOT set!)" : "(bottom)" );
 
 	return 12 + (plen + 7) / 8;
@@ -1390,7 +1398,7 @@ bgp_attr_print(netdissect_options *ndo,
 			ND_TCHECK(*tptr);
 			ND_PRINT((ndo, "%s", tok2str(bgp_origin_values,
 						"Unknown Origin Typecode",
-						tptr[0])));
+						EXTRACT_U_1(tptr))));
 		}
 		break;
 
@@ -1421,19 +1429,19 @@ bgp_attr_print(netdissect_options *ndo,
 		while (tptr < pptr + len) {
 			ND_TCHECK(tptr[0]);
                         ND_PRINT((ndo, "%s", tok2str(bgp_as_path_segment_open_values,
-						"?", tptr[0])));
+						"?", EXTRACT_U_1(tptr))));
 			ND_TCHECK(tptr[1]);
                         for (i = 0; i < tptr[1] * as_size; i += as_size) {
                             ND_TCHECK2(tptr[2 + i], as_size);
 			    ND_PRINT((ndo, "%s ",
 				as_printf(ndo, astostr, sizeof(astostr),
 				as_size == 2 ?
-				EXTRACT_16BITS(&tptr[2 + i]) :
-				EXTRACT_32BITS(&tptr[2 + i]))));
+				EXTRACT_BE_U_2(tptr + i + 2) :
+				EXTRACT_BE_U_4(tptr + i + 2))));
                         }
 			ND_TCHECK(tptr[0]);
                         ND_PRINT((ndo, "%s", tok2str(bgp_as_path_segment_close_values,
-						"?", tptr[0])));
+						"?", EXTRACT_U_1(tptr))));
                         ND_TCHECK(tptr[1]);
                         tptr += 2 + tptr[1] * as_size;
 		}
@@ -1442,7 +1450,7 @@ bgp_attr_print(netdissect_options *ndo,
 		if (len != 4)
 			ND_PRINT((ndo, "invalid len"));
 		else {
-			ND_TCHECK2(tptr[0], 4);
+			ND_TCHECK_4(tptr);
 			ND_PRINT((ndo, "%s", ipaddr_string(ndo, tptr)));
 		}
 		break;
@@ -1451,8 +1459,8 @@ bgp_attr_print(netdissect_options *ndo,
 		if (len != 4)
 			ND_PRINT((ndo, "invalid len"));
 		else {
-			ND_TCHECK2(tptr[0], 4);
-			ND_PRINT((ndo, "%u", EXTRACT_32BITS(tptr)));
+			ND_TCHECK_4(tptr);
+			ND_PRINT((ndo, "%u", EXTRACT_BE_U_4(tptr)));
 		}
 		break;
 	case BGPTYPE_ATOMIC_AGGREGATE:
@@ -1472,12 +1480,12 @@ bgp_attr_print(netdissect_options *ndo,
                 ND_TCHECK2(tptr[0], len);
                 if (len == 6) {
 		    ND_PRINT((ndo, " AS #%s, origin %s",
-			as_printf(ndo, astostr, sizeof(astostr), EXTRACT_16BITS(tptr)),
+			as_printf(ndo, astostr, sizeof(astostr), EXTRACT_BE_U_2(tptr)),
 			ipaddr_string(ndo, tptr + 2)));
                 } else {
 		    ND_PRINT((ndo, " AS #%s, origin %s",
 			as_printf(ndo, astostr, sizeof(astostr),
-			EXTRACT_32BITS(tptr)), ipaddr_string(ndo, tptr + 4)));
+			EXTRACT_BE_U_4(tptr)), ipaddr_string(ndo, tptr + 4)));
                 }
                 break;
 	case BGPTYPE_AGGREGATOR4:
@@ -1485,10 +1493,10 @@ bgp_attr_print(netdissect_options *ndo,
 			ND_PRINT((ndo, "invalid len"));
 			break;
 		}
-		ND_TCHECK2(tptr[0], 8);
+		ND_TCHECK_8(tptr);
 		ND_PRINT((ndo, " AS #%s, origin %s",
-	   	    as_printf(ndo, astostr, sizeof(astostr), EXTRACT_32BITS(tptr)),
-		    ipaddr_string(ndo, tptr + 4)));
+	   	    as_printf(ndo, astostr, sizeof(astostr), EXTRACT_BE_U_4(tptr)),
+	   	    ipaddr_string(ndo, tptr + 4)));
 		break;
 	case BGPTYPE_COMMUNITIES:
 		if (len % 4) {
@@ -1497,8 +1505,8 @@ bgp_attr_print(netdissect_options *ndo,
 		}
 		while (tlen>0) {
 			uint32_t comm;
-			ND_TCHECK2(tptr[0], 4);
-			comm = EXTRACT_32BITS(tptr);
+			ND_TCHECK_4(tptr);
+			comm = EXTRACT_BE_U_4(tptr);
 			switch (comm) {
 			case BGP_COMMUNITY_NO_EXPORT:
 				ND_PRINT((ndo, " NO_EXPORT"));
@@ -1525,7 +1533,7 @@ bgp_attr_print(netdissect_options *ndo,
 			ND_PRINT((ndo, "invalid len"));
 			break;
 		}
-		ND_TCHECK2(tptr[0], 4);
+		ND_TCHECK_4(tptr);
                 ND_PRINT((ndo, "%s",ipaddr_string(ndo, tptr)));
                 break;
         case BGPTYPE_CLUSTER_LIST:
@@ -1534,7 +1542,7 @@ bgp_attr_print(netdissect_options *ndo,
 			break;
 		}
                 while (tlen>0) {
-			ND_TCHECK2(tptr[0], 4);
+			ND_TCHECK_4(tptr);
                         ND_PRINT((ndo, "%s%s",
                                ipaddr_string(ndo, tptr),
                                 (tlen>4) ? ", " : ""));
@@ -1543,9 +1551,9 @@ bgp_attr_print(netdissect_options *ndo,
                 }
                 break;
 	case BGPTYPE_MP_REACH_NLRI:
-		ND_TCHECK2(tptr[0], 3);
-		af = EXTRACT_16BITS(tptr);
-		safi = tptr[2];
+		ND_TCHECK_3(tptr);
+		af = EXTRACT_BE_U_2(tptr);
+		safi = EXTRACT_U_1(tptr + 2);
 
                 ND_PRINT((ndo, "\n\t    AFI: %s (%u), %sSAFI: %s (%u)",
                        tok2str(af_values, "Unknown AFI", af),
@@ -1614,7 +1622,7 @@ bgp_attr_print(netdissect_options *ndo,
                         case (AFNUM_INET<<8 | SAFNUM_RT_ROUTING_INFO):
                         case (AFNUM_INET<<8 | SAFNUM_MULTICAST_VPN):
                         case (AFNUM_INET<<8 | SAFNUM_MDT):
-			    if (tlen < (int)sizeof(struct in_addr)) {
+			    if (tlen < sizeof(struct in_addr)) {
                                 ND_PRINT((ndo, "invalid len"));
                                 tlen = 0;
                             } else {
@@ -1627,7 +1635,7 @@ bgp_attr_print(netdissect_options *ndo,
                         case (AFNUM_INET<<8 | SAFNUM_VPNUNICAST):
                         case (AFNUM_INET<<8 | SAFNUM_VPNMULTICAST):
                         case (AFNUM_INET<<8 | SAFNUM_VPNUNIMULTICAST):
-                            if (tlen < (int)(sizeof(struct in_addr)+BGP_VPN_RD_LEN)) {
+                            if (tlen < sizeof(struct in_addr)+BGP_VPN_RD_LEN) {
                                 ND_PRINT((ndo, "invalid len"));
                                 tlen = 0;
                             } else {
@@ -1643,7 +1651,7 @@ bgp_attr_print(netdissect_options *ndo,
                         case (AFNUM_INET6<<8 | SAFNUM_MULTICAST):
                         case (AFNUM_INET6<<8 | SAFNUM_UNIMULTICAST):
                         case (AFNUM_INET6<<8 | SAFNUM_LABUNICAST):
-                            if (tlen < (int)sizeof(struct in6_addr)) {
+                            if (tlen < sizeof(struct in6_addr)) {
                                 ND_PRINT((ndo, "invalid len"));
                                 tlen = 0;
                             } else {
@@ -1656,7 +1664,7 @@ bgp_attr_print(netdissect_options *ndo,
                         case (AFNUM_INET6<<8 | SAFNUM_VPNUNICAST):
                         case (AFNUM_INET6<<8 | SAFNUM_VPNMULTICAST):
                         case (AFNUM_INET6<<8 | SAFNUM_VPNUNIMULTICAST):
-                            if (tlen < (int)(sizeof(struct in6_addr)+BGP_VPN_RD_LEN)) {
+                            if (tlen < sizeof(struct in6_addr)+BGP_VPN_RD_LEN) {
                                 ND_PRINT((ndo, "invalid len"));
                                 tlen = 0;
                             } else {
@@ -1672,7 +1680,7 @@ bgp_attr_print(netdissect_options *ndo,
                         case (AFNUM_L2VPN<<8 | SAFNUM_VPNUNICAST):
                         case (AFNUM_L2VPN<<8 | SAFNUM_VPNMULTICAST):
                         case (AFNUM_L2VPN<<8 | SAFNUM_VPNUNIMULTICAST):
-                            if (tlen < (int)sizeof(struct in_addr)) {
+                            if (tlen < sizeof(struct in_addr)) {
                                 ND_PRINT((ndo, "invalid len"));
                                 tlen = 0;
                             } else {
@@ -1703,10 +1711,10 @@ bgp_attr_print(netdissect_options *ndo,
                                        bgp_vpn_rd_print(ndo, tptr),
                                        isonsap_string(ndo, tptr+BGP_VPN_RD_LEN,tlen-BGP_VPN_RD_LEN)));
                                 /* rfc986 mapped IPv4 address ? */
-                                if (EXTRACT_32BITS(tptr+BGP_VPN_RD_LEN) ==  0x47000601)
+                                if (EXTRACT_BE_U_4(tptr + BGP_VPN_RD_LEN) ==  0x47000601)
                                     ND_PRINT((ndo, " = %s", ipaddr_string(ndo, tptr+BGP_VPN_RD_LEN+4)));
                                 /* rfc1888 mapped IPv6 address ? */
-                                else if (EXTRACT_24BITS(tptr+BGP_VPN_RD_LEN) ==  0x350000)
+                                else if (EXTRACT_BE_U_3(tptr + BGP_VPN_RD_LEN) ==  0x350000)
                                     ND_PRINT((ndo, " = %s", ip6addr_string(ndo, tptr+BGP_VPN_RD_LEN+3)));
                                 tptr += tlen;
                                 tlen = 0;
@@ -1735,7 +1743,7 @@ bgp_attr_print(netdissect_options *ndo,
 			ND_PRINT((ndo, "\n\t    %u SNPA", snpa));
 			for (/*nothing*/; snpa > 0; snpa--) {
 				ND_TCHECK(tptr[0]);
-				ND_PRINT((ndo, "\n\t      %d bytes", tptr[0]));
+				ND_PRINT((ndo, "\n\t      %d bytes", EXTRACT_U_1(tptr)));
 				tptr += tptr[0] + 1;
 			}
 		} else {
@@ -1895,7 +1903,7 @@ bgp_attr_print(netdissect_options *ndo,
 
 	case BGPTYPE_MP_UNREACH_NLRI:
 		ND_TCHECK2(tptr[0], BGP_MP_NLRI_MINSIZE);
-		af = EXTRACT_16BITS(tptr);
+		af = EXTRACT_BE_U_2(tptr);
 		safi = tptr[2];
 
                 ND_PRINT((ndo, "\n\t    AFI: %s (%u), %sSAFI: %s (%u)",
@@ -2057,8 +2065,8 @@ bgp_attr_print(netdissect_options *ndo,
                 while (tlen>0) {
                     uint16_t extd_comm;
 
-                    ND_TCHECK2(tptr[0], 2);
-                    extd_comm=EXTRACT_16BITS(tptr);
+                    ND_TCHECK_2(tptr);
+                    extd_comm=EXTRACT_BE_U_2(tptr);
 
 		    ND_PRINT((ndo, "\n\t    %s (0x%04x), Flags [%s]",
 			   tok2str(bgp_extd_comm_subtype_values,
@@ -2067,14 +2075,14 @@ bgp_attr_print(netdissect_options *ndo,
 			   extd_comm,
 			   bittok2str(bgp_extd_comm_flag_values, "none", extd_comm)));
 
-                    ND_TCHECK2(*(tptr+2), 6);
+                    ND_TCHECK_6(tptr + 2);
                     switch(extd_comm) {
                     case BGP_EXT_COM_RT_0:
                     case BGP_EXT_COM_RO_0:
                     case BGP_EXT_COM_L2VPN_RT_0:
                         ND_PRINT((ndo, ": %u:%u (= %s)",
-                               EXTRACT_16BITS(tptr+2),
-                               EXTRACT_32BITS(tptr+4),
+                               EXTRACT_BE_U_2(tptr + 2),
+                               EXTRACT_BE_U_4(tptr + 4),
                                ipaddr_string(ndo, tptr+4)));
                         break;
                     case BGP_EXT_COM_RT_1:
@@ -2083,16 +2091,16 @@ bgp_attr_print(netdissect_options *ndo,
                     case BGP_EXT_COM_VRF_RT_IMP:
                         ND_PRINT((ndo, ": %s:%u",
                                ipaddr_string(ndo, tptr+2),
-                               EXTRACT_16BITS(tptr+6)));
+                               EXTRACT_BE_U_2(tptr + 6)));
                         break;
                     case BGP_EXT_COM_RT_2:
                     case BGP_EXT_COM_RO_2:
 			ND_PRINT((ndo, ": %s:%u",
 			    as_printf(ndo, astostr, sizeof(astostr),
-			    EXTRACT_32BITS(tptr+2)), EXTRACT_16BITS(tptr+6)));
+			    EXTRACT_BE_U_4(tptr + 2)), EXTRACT_BE_U_2(tptr + 6)));
 			break;
                     case BGP_EXT_COM_LINKBAND:
-		        bw.i = EXTRACT_32BITS(tptr+2);
+		        bw.i = EXTRACT_BE_U_4(tptr + 2);
                         ND_PRINT((ndo, ": bandwidth: %.3f Mbps",
                                bw.f*8/1000000));
                         break;
@@ -2110,23 +2118,23 @@ bgp_attr_print(netdissect_options *ndo,
                                ipaddr_string(ndo, tptr+2),
                                tok2str(bgp_extd_comm_ospf_rtype_values,
 					  "unknown (0x%02x)",
-					  *(tptr+6)),
-                               (*(tptr+7) &  BGP_OSPF_RTYPE_METRIC_TYPE) ? "E2" : "",
-                               ((*(tptr+6) == BGP_OSPF_RTYPE_EXT) || (*(tptr+6) == BGP_OSPF_RTYPE_NSSA)) ? "E1" : ""));
+					  EXTRACT_U_1((tptr + 6))),
+                               (EXTRACT_U_1(tptr + 7) &  BGP_OSPF_RTYPE_METRIC_TYPE) ? "E2" : "",
+                               ((EXTRACT_U_1(tptr + 6) == BGP_OSPF_RTYPE_EXT) || (EXTRACT_U_1(tptr + 6) == BGP_OSPF_RTYPE_NSSA)) ? "E1" : ""));
                         break;
                     case BGP_EXT_COM_L2INFO:
                         ND_PRINT((ndo, ": %s Control Flags [0x%02x]:MTU %u",
                                tok2str(l2vpn_encaps_values,
 					  "unknown encaps",
-					  *(tptr+2)),
-                                       *(tptr+3),
-                               EXTRACT_16BITS(tptr+4)));
+					  EXTRACT_U_1((tptr + 2))),
+                               EXTRACT_U_1((tptr + 3)),
+                               EXTRACT_BE_U_2(tptr + 4)));
                         break;
                     case BGP_EXT_COM_SOURCE_AS:
-                        ND_PRINT((ndo, ": AS %u", EXTRACT_16BITS(tptr+2)));
+                        ND_PRINT((ndo, ": AS %u", EXTRACT_BE_U_2(tptr + 2)));
                         break;
                     default:
-                        ND_TCHECK2(*tptr,8);
+                        ND_TCHECK_8(tptr);
                         print_unknown_data(ndo, tptr, "\n\t      ", 8);
                         break;
                     }
@@ -2139,16 +2147,16 @@ bgp_attr_print(netdissect_options *ndo,
         {
                 uint8_t tunnel_type, flags;
 
-                ND_TCHECK2(tptr[0], 5);
-                tunnel_type = *(tptr+1);
-                flags = *tptr;
+                ND_TCHECK_5(tptr);
+                flags = EXTRACT_U_1(tptr);
+                tunnel_type = EXTRACT_U_1(tptr + 1);
                 tlen = len;
 
                 ND_PRINT((ndo, "\n\t    Tunnel-type %s (%u), Flags [%s], MPLS Label %u",
                        tok2str(bgp_pmsi_tunnel_values, "Unknown", tunnel_type),
                        tunnel_type,
                        bittok2str(bgp_pmsi_flag_values, "none", flags),
-                       EXTRACT_24BITS(tptr+2)>>4));
+                       EXTRACT_BE_U_3(tptr + 2)>>4));
 
                 tptr +=5;
                 tlen -= 5;
@@ -2156,35 +2164,35 @@ bgp_attr_print(netdissect_options *ndo,
                 switch (tunnel_type) {
                 case BGP_PMSI_TUNNEL_PIM_SM: /* fall through */
                 case BGP_PMSI_TUNNEL_PIM_BIDIR:
-                    ND_TCHECK2(tptr[0], 8);
+                    ND_TCHECK_8(tptr);
                     ND_PRINT((ndo, "\n\t      Sender %s, P-Group %s",
                            ipaddr_string(ndo, tptr),
                            ipaddr_string(ndo, tptr+4)));
                     break;
 
                 case BGP_PMSI_TUNNEL_PIM_SSM:
-                    ND_TCHECK2(tptr[0], 8);
+                    ND_TCHECK_8(tptr);
                     ND_PRINT((ndo, "\n\t      Root-Node %s, P-Group %s",
                            ipaddr_string(ndo, tptr),
                            ipaddr_string(ndo, tptr+4)));
                     break;
                 case BGP_PMSI_TUNNEL_INGRESS:
-                    ND_TCHECK2(tptr[0], 4);
+                    ND_TCHECK_4(tptr);
                     ND_PRINT((ndo, "\n\t      Tunnel-Endpoint %s",
                            ipaddr_string(ndo, tptr)));
                     break;
                 case BGP_PMSI_TUNNEL_LDP_P2MP: /* fall through */
                 case BGP_PMSI_TUNNEL_LDP_MP2MP:
-                    ND_TCHECK2(tptr[0], 8);
+                    ND_TCHECK_8(tptr);
                     ND_PRINT((ndo, "\n\t      Root-Node %s, LSP-ID 0x%08x",
                            ipaddr_string(ndo, tptr),
-                           EXTRACT_32BITS(tptr+4)));
+                           EXTRACT_BE_U_4(tptr + 4)));
                     break;
                 case BGP_PMSI_TUNNEL_RSVP_P2MP:
-                    ND_TCHECK2(tptr[0], 8);
+                    ND_TCHECK_8(tptr);
                     ND_PRINT((ndo, "\n\t      Extended-Tunnel-ID %s, P2MP-ID 0x%08x",
                            ipaddr_string(ndo, tptr),
-                           EXTRACT_32BITS(tptr+4)));
+                           EXTRACT_BE_U_4(tptr + 4)));
                     break;
                 default:
                     if (ndo->ndo_vflag <= 1) {
@@ -2202,10 +2210,10 @@ bgp_attr_print(netdissect_options *ndo,
 
 		while (tlen >= 3) {
 
-		    ND_TCHECK2(tptr[0], 3);
+		    ND_TCHECK_3(tptr);
 
-		    type = *tptr;
-		    length = EXTRACT_16BITS(tptr+1);
+		    type = EXTRACT_U_1(tptr);
+		    length = EXTRACT_BE_U_2(tptr + 1);
 		    tptr += 3;
 		    tlen -= 3;
 
@@ -2228,7 +2236,7 @@ bgp_attr_print(netdissect_options *ndo,
 		        if (length < 8)
 		            goto trunc;
 			ND_PRINT((ndo, ", metric %" PRIu64,
-				  EXTRACT_64BITS(tptr)));
+				  EXTRACT_BE_U_8(tptr)));
 			break;
 
 		    default:
@@ -2243,22 +2251,22 @@ bgp_attr_print(netdissect_options *ndo,
 		break;
 	}
         case BGPTYPE_ATTR_SET:
-                ND_TCHECK2(tptr[0], 4);
+                ND_TCHECK_4(tptr);
                 if (len < 4)
                 	goto trunc;
 		ND_PRINT((ndo, "\n\t    Origin AS: %s",
-		    as_printf(ndo, astostr, sizeof(astostr), EXTRACT_32BITS(tptr))));
+		    as_printf(ndo, astostr, sizeof(astostr), EXTRACT_BE_U_4(tptr))));
 		tptr+=4;
                 len -=4;
 
                 while (len) {
                     u_int aflags, alenlen, alen;
 
-                    ND_TCHECK2(tptr[0], 2);
+                    ND_TCHECK_2(tptr);
                     if (len < 2)
                         goto trunc;
-                    aflags = *tptr;
-                    atype = *(tptr + 1);
+                    aflags = EXTRACT_U_1(tptr);
+                    atype = EXTRACT_U_1(tptr + 1);
                     tptr += 2;
                     len -= 2;
                     alenlen = bgp_attr_lenlen(aflags, tptr);
@@ -2302,9 +2310,9 @@ bgp_attr_print(netdissect_options *ndo,
 		while (len > 0) {
 			ND_TCHECK2(*tptr, 12);
 			ND_PRINT((ndo, "%u:%u:%u%s",
-				 EXTRACT_32BITS(tptr),
-				 EXTRACT_32BITS(tptr + 4),
-				 EXTRACT_32BITS(tptr + 8),
+				 EXTRACT_BE_U_4(tptr),
+				 EXTRACT_BE_U_4(tptr + 4),
+				 EXTRACT_BE_U_4(tptr + 8),
 				 (len > 12) ? ", " : ""));
                         tptr += 12;
                         len -= 12;
@@ -2349,27 +2357,27 @@ bgp_capabilities_print(netdissect_options *ndo,
                 case BGP_CAPCODE_MP:
                     ND_PRINT((ndo, "\n\t\tAFI %s (%u), SAFI %s (%u)",
                            tok2str(af_values, "Unknown",
-                                      EXTRACT_16BITS(opt+i+2)),
-                           EXTRACT_16BITS(opt+i+2),
+                                      EXTRACT_BE_U_2(opt + i + 2)),
+                           EXTRACT_BE_U_2(opt + i + 2),
                            tok2str(bgp_safi_values, "Unknown",
-                                      opt[i+5]),
-                           opt[i+5]));
+                                      EXTRACT_U_1(opt + i + 5)),
+                           EXTRACT_U_1(opt + i + 5)));
                     break;
                 case BGP_CAPCODE_RESTART:
                     ND_PRINT((ndo, "\n\t\tRestart Flags: [%s], Restart Time %us",
-                           ((opt[i+2])&0x80) ? "R" : "none",
-                           EXTRACT_16BITS(opt+i+2)&0xfff));
+                           ((EXTRACT_U_1(opt + i + 2))&0x80) ? "R" : "none",
+                           EXTRACT_BE_U_2(opt + i + 2)&0xfff));
                     tcap_len-=2;
                     cap_offset=4;
                     while(tcap_len>=4) {
                         ND_PRINT((ndo, "\n\t\t  AFI %s (%u), SAFI %s (%u), Forwarding state preserved: %s",
                                tok2str(af_values,"Unknown",
-                                          EXTRACT_16BITS(opt+i+cap_offset)),
-                               EXTRACT_16BITS(opt+i+cap_offset),
+                                          EXTRACT_BE_U_2(opt + i + cap_offset)),
+                               EXTRACT_BE_U_2(opt + i + cap_offset),
                                tok2str(bgp_safi_values,"Unknown",
-                                          opt[i+cap_offset+2]),
-                               opt[i+cap_offset+2],
-                               ((opt[i+cap_offset+3])&0x80) ? "yes" : "no" ));
+                                          EXTRACT_U_1(opt + i + cap_offset + 2)),
+                               EXTRACT_U_1(opt + (i + cap_offset + 2)),
+                               ((EXTRACT_U_1(opt + (i + cap_offset + 3)))&0x80) ? "yes" : "no" ));
                         tcap_len-=4;
                         cap_offset+=4;
                     }
@@ -2385,7 +2393,7 @@ bgp_capabilities_print(netdissect_options *ndo,
                     if (cap_len == 4) {
                         ND_PRINT((ndo, "\n\t\t 4 Byte AS %s",
                             as_printf(ndo, astostr, sizeof(astostr),
-                            EXTRACT_32BITS(opt + i + 2))));
+                            EXTRACT_BE_U_4(opt + i + 2))));
                     }
                     break;
                 case BGP_CAPCODE_ADD_PATH:
@@ -2400,11 +2408,11 @@ bgp_capabilities_print(netdissect_options *ndo,
                             break;
                         }
                         ND_PRINT((ndo, "\n\t\tAFI %s (%u), SAFI %s (%u), Send/Receive: %s",
-                                  tok2str(af_values,"Unknown",EXTRACT_16BITS(opt+i+cap_offset)),
-                                  EXTRACT_16BITS(opt+i+cap_offset),
-                                  tok2str(bgp_safi_values,"Unknown",opt[i+cap_offset+2]),
-                                  opt[i+cap_offset+2],
-                                  tok2str(bgp_add_path_recvsend,"Bogus (0x%02x)",opt[i+cap_offset+3])
+                                  tok2str(af_values,"Unknown",EXTRACT_BE_U_2(opt + i + cap_offset)),
+                                  EXTRACT_BE_U_2(opt + i + cap_offset),
+                                  tok2str(bgp_safi_values,"Unknown",EXTRACT_U_1(opt + i + cap_offset + 2)),
+                                  EXTRACT_U_1(opt + (i + cap_offset + 2)),
+                                  tok2str(bgp_add_path_recvsend,"Bogus (0x%02x)",EXTRACT_U_1(opt + i + cap_offset + 3))
                         ));
                         tcap_len-=4;
                         cap_offset+=4;
@@ -2509,10 +2517,10 @@ bgp_update_print(netdissect_options *ndo,
 	length -= BGP_SIZE;
 
 	/* Unfeasible routes */
-	ND_TCHECK2(p[0], 2);
+	ND_TCHECK_2(p);
 	if (length < 2)
 		goto trunc;
-	withdrawn_routes_len = EXTRACT_16BITS(p);
+	withdrawn_routes_len = EXTRACT_BE_U_2(p);
 	p += 2;
 	length -= 2;
 	if (withdrawn_routes_len) {
@@ -2529,10 +2537,10 @@ bgp_update_print(netdissect_options *ndo,
 		length -= withdrawn_routes_len;
 	}
 
-	ND_TCHECK2(p[0], 2);
+	ND_TCHECK_2(p);
 	if (length < 2)
 		goto trunc;
-	len = EXTRACT_16BITS(p);
+	len = EXTRACT_BE_U_2(p);
 	p += 2;
 	length -= 2;
 
@@ -2547,13 +2555,13 @@ bgp_update_print(netdissect_options *ndo,
 		while (len) {
 			int aflags, atype, alenlen, alen;
 
-			ND_TCHECK2(p[0], 2);
+			ND_TCHECK_2(p);
 			if (len < 2)
 			    goto trunc;
 			if (length < 2)
 			    goto trunc;
-			aflags = *p;
-			atype = *(p + 1);
+			aflags = EXTRACT_U_1(p);
+			atype = EXTRACT_U_1(p + 1);
 			p += 2;
 			len -= 2;
 			length -= 2;
@@ -2692,14 +2700,14 @@ bgp_notification_print(netdissect_options *ndo,
              */
 	    if(bgpn.bgpn_minor == BGP_NOTIFY_MINOR_CEASE_MAXPRFX && length >= BGP_NOTIFICATION_SIZE + 7) {
 		tptr = dat + BGP_NOTIFICATION_SIZE;
-		ND_TCHECK2(*tptr, 7);
+		ND_TCHECK_7(tptr);
 		ND_PRINT((ndo, ", AFI %s (%u), SAFI %s (%u), Max Prefixes: %u",
 		       tok2str(af_values, "Unknown",
-				  EXTRACT_16BITS(tptr)),
-		       EXTRACT_16BITS(tptr),
-		       tok2str(bgp_safi_values, "Unknown", *(tptr+2)),
-		       *(tptr+2),
-		       EXTRACT_32BITS(tptr+3)));
+				  EXTRACT_BE_U_2(tptr)),
+		       EXTRACT_BE_U_2(tptr),
+		       tok2str(bgp_safi_values, "Unknown", EXTRACT_U_1((tptr + 2))),
+		       EXTRACT_U_1((tptr + 2)),
+		       EXTRACT_BE_U_4(tptr + 3)));
 	    }
 	    /*
 	     * draft-ietf-idr-shutdown describes a method to send a communication
@@ -2709,8 +2717,8 @@ bgp_notification_print(netdissect_options *ndo,
 		bgpn.bgpn_minor == BGP_NOTIFY_MINOR_CEASE_RESET) &&
 		length >= BGP_NOTIFICATION_SIZE + 1) {
 		    tptr = dat + BGP_NOTIFICATION_SIZE;
-		    ND_TCHECK2(*tptr, 1);
-		    shutdown_comm_length = *(tptr);
+		    ND_TCHECK_1(tptr);
+		    shutdown_comm_length = EXTRACT_U_1(tptr);
 		    remainder_offset = 0;
 		    /* garbage, hexdump it all */
 		    if (shutdown_comm_length > BGP_NOTIFY_MINOR_CEASE_ADMIN_SHUTDOWN_LEN ||
@@ -2763,8 +2771,8 @@ bgp_route_refresh_print(netdissect_options *ndo,
                tok2str(af_values,"Unknown",
 			  /* this stinks but the compiler pads the structure
 			   * weird */
-			  EXTRACT_16BITS(&bgp_route_refresh_header->afi)),
-               EXTRACT_16BITS(&bgp_route_refresh_header->afi),
+			  EXTRACT_BE_U_2(&bgp_route_refresh_header->afi)),
+               EXTRACT_BE_U_2(&bgp_route_refresh_header->afi),
                tok2str(bgp_safi_values,"Unknown",
 			  bgp_route_refresh_header->safi),
                bgp_route_refresh_header->safi));
@@ -2846,7 +2854,7 @@ bgp_print(netdissect_options *ndo,
 	p = dat;
 	start = p;
 	while (p < ep) {
-		if (!ND_TTEST2(p[0], 1))
+		if (!ND_TTEST_1(p))
 			break;
 		if (p[0] != 0xff) {
 			p++;

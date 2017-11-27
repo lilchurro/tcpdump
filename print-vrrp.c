@@ -120,13 +120,13 @@ vrrp_print(netdissect_options *ndo,
 	if (version < 2 || version > 3 || type != VRRP_TYPE_ADVERTISEMENT)
 		return;
 	ND_TCHECK(bp[2]);
-	ND_PRINT((ndo, ", vrid %u, prio %u", bp[1], bp[2]));
+	ND_PRINT((ndo, ", vrid %u, prio %u", EXTRACT_U_1(bp + 1), EXTRACT_U_1(bp + 2)));
 	ND_TCHECK(bp[5]);
 
 	if (version == 2) {
 		auth_type = bp[4];
 		ND_PRINT((ndo, ", authtype %s", tok2str(auth2str, NULL, auth_type)));
-		ND_PRINT((ndo, ", intvl %us, length %u", bp[5], len));
+		ND_PRINT((ndo, ", intvl %us, length %u", EXTRACT_U_1(bp + 5), len));
 	} else { /* version == 3 */
 		uint16_t intvl = (bp[4] & 0x0f) << 8 | bp[5];
 		ND_PRINT((ndo, ", intvl %ucs, length %u", intvl, len));
@@ -144,7 +144,7 @@ vrrp_print(netdissect_options *ndo,
 			vec[0].len = len;
 			if (in_cksum(vec, 1))
 				ND_PRINT((ndo, ", (bad vrrp cksum %x)",
-					EXTRACT_16BITS(&bp[6])));
+					EXTRACT_BE_U_2(bp + 6)));
 		}
 
 		if (version == 3 && ND_TTEST2(bp[0], len)) {
@@ -152,7 +152,7 @@ vrrp_print(netdissect_options *ndo,
 				len, len, IPPROTO_VRRP);
 			if (cksum)
 				ND_PRINT((ndo, ", (bad vrrp cksum %x)",
-					EXTRACT_16BITS(&bp[6])));
+					EXTRACT_BE_U_2(bp + 6)));
 		}
 
 		ND_PRINT((ndo, ", addrs"));
