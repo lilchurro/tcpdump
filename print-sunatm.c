@@ -78,7 +78,7 @@ sunatm_if_print(netdissect_options *ndo,
 	}
 
 	if (ndo->ndo_eflag) {
-		ND_PRINT((ndo, p[DIR_POS] & 0x80 ? "Tx: " : "Rx: "));
+		ND_PRINT((ndo, EXTRACT_U_1(p + DIR_POS) & 0x80 ? "Tx: " : "Rx: "));
 	}
 
 	switch (p[DIR_POS] & 0x0f) {
@@ -96,7 +96,7 @@ sunatm_if_print(netdissect_options *ndo,
 		break;
 	}
 
-	vci = EXTRACT_16BITS(&p[VCI_POS]);
+	vci = EXTRACT_BE_U_2(p + VCI_POS);
 	vpi = p[VPI_POS];
 
 	p += PKT_BEGIN_POS;

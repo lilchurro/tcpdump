@@ -69,6 +69,7 @@ runOutfileTests() {
 
 passed=0
 failed=0
+
 echo $passed >.passed
 echo $failed >.failed
 if [ $# -eq 0 ]

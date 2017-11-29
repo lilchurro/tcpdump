@@ -35,17 +35,17 @@ msdp_print(netdissect_options *ndo, const u_char *sp, u_int length)
 {
 	unsigned int type, len;
 
-	ND_TCHECK2(*sp, 3);
+	ND_TCHECK_3(sp);
 	/* See if we think we're at the beginning of a compound packet */
 	type = *sp;
-	len = EXTRACT_16BITS(sp + 1);
+	len = EXTRACT_BE_U_2(sp + 1);
 	if (len > 1500 || len < 3 || type == 0 || type > MSDP_TYPE_MAX)
 		goto trunc;	/* not really truncated, but still not decodable */
 	ND_PRINT((ndo, " msdp:"));
 	while (length > 0) {
-		ND_TCHECK2(*sp, 3);
+		ND_TCHECK_3(sp);
 		type = *sp;
-		len = EXTRACT_16BITS(sp + 1);
+		len = EXTRACT_BE_U_2(sp + 1);
 		if (len > 1400 || ndo->ndo_vflag)
 			ND_PRINT((ndo, " [len %u]", len));
 		if (len < 3)
@@ -60,7 +60,7 @@ msdp_print(netdissect_options *ndo, const u_char *sp, u_int length)
 			else
 				ND_PRINT((ndo, " SA-Response"));
 			ND_TCHECK(*sp);
-			ND_PRINT((ndo, " %u entries", *sp));
+			ND_PRINT((ndo, " %u entries", EXTRACT_U_1(sp)));
 			if ((u_int)((*sp * 12) + 8) < len) {
 				ND_PRINT((ndo, " [w/data]"));
 				if (ndo->ndo_vflag > 1) {
@@ -72,7 +72,7 @@ msdp_print(netdissect_options *ndo, const u_char *sp, u_int length)
 			break;
 		case 2:
 			ND_PRINT((ndo, " SA-Request"));
-			ND_TCHECK2(*sp, 5);
+			ND_TCHECK_5(sp);
 			ND_PRINT((ndo, " for %s", ipaddr_string(ndo, sp + 1)));
 			break;
 		case 4:

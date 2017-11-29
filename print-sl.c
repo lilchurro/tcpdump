@@ -151,8 +151,8 @@ sliplink_print(netdissect_options *ndo,
 		register int i;
 
 		for (i = SLX_CHDR; i < SLX_CHDR + CHDR_LEN - 1; ++i)
-			ND_PRINT((ndo, "%02x.", p[i]));
-		ND_PRINT((ndo, "%02x: ", p[SLX_CHDR + CHDR_LEN - 1]));
+			ND_PRINT((ndo, "%02x.", EXTRACT_U_1(p + i)));
+		ND_PRINT((ndo, "%02x: ", EXTRACT_U_1(p + SLX_CHDR + CHDR_LEN - 1)));
 		return;
 	}
 	switch (p[SLX_CHDR] & 0xf0) {
@@ -188,7 +188,7 @@ sliplink_print(netdissect_options *ndo,
 			    length, dir);
 			ND_PRINT((ndo, ": "));
 		} else
-			ND_PRINT((ndo, "slip-%d!: ", p[SLX_CHDR]));
+			ND_PRINT((ndo, "slip-%d!: ", EXTRACT_U_1(p + SLX_CHDR)));
 	}
 }
 
@@ -199,7 +199,7 @@ print_sl_change(netdissect_options *ndo,
 	register u_int i;
 
 	if ((i = *cp++) == 0) {
-		i = EXTRACT_16BITS(cp);
+		i = EXTRACT_BE_U_2(cp);
 		cp += 2;
 	}
 	ND_PRINT((ndo, " %s%d", str, i));
@@ -213,7 +213,7 @@ print_sl_winchange(netdissect_options *ndo,
 	register short i;
 
 	if ((i = *cp++) == 0) {
-		i = EXTRACT_16BITS(cp);
+		i = EXTRACT_BE_U_2(cp);
 		cp += 2;
 	}
 	if (i >= 0)
@@ -231,9 +231,11 @@ compressed_sl_print(netdissect_options *ndo,
 	register const u_char *cp = chdr;
 	register u_int flags, hlen;
 
-	flags = *cp++;
+	flags = EXTRACT_U_1(cp);
+	cp++;
 	if (flags & NEW_C) {
-		lastconn = *cp++;
+		lastconn = EXTRACT_U_1(cp);
+		cp++;
 		ND_PRINT((ndo, "ctcp %d", lastconn));
 	} else
 		ND_PRINT((ndo, "ctcp *"));

@@ -26,7 +26,7 @@
 #include <pcap/pcap.h>
 #include <ether.h>
 #include "clean_cap_dump.h"
-#include <extract.h>
+#include "extract.h"
 #include "ethertype.h"
 #include "ip.h"
 #include "tcp.h"
@@ -46,7 +46,7 @@ get_iph_ptr(const struct pcap_pkthdr *h, u_char *bp) {
 	if (h->caplen < ETHER_HDRLEN || h->len < ETHER_HDRLEN) {
 		return NULL;
 	}
-	length_type = EXTRACT_16BITS(&ep->ether_length_type);
+	length_type = EXTRACT_BE_U_2(&ep->ether_length_type);
 	if (length_type == ETHERTYPE_IP) {
 		s = bp + ETHER_HDRLEN;
 	ip = (const struct ip *)s;
@@ -217,7 +217,7 @@ pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 			} else if (p->ip_p == IPPROTO_UDP) {
 				struct udphdr *u = (struct udphdr *)(ip+ph_len);
 				if (p_len < sizeof(struct udphdr) ||
-				    EXTRACT_16BITS(&u->uh_ulen) < sizeof(struct udphdr)) {
+				    EXTRACT_BE_U_2(&u->uh_ulen) < sizeof(struct udphdr)) {
 					break;
 				} else {
 					p_end = (u_char *)(ip + ph_len + sizeof(struct udphdr));
