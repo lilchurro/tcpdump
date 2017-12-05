@@ -974,7 +974,7 @@ juniper_atm1_if_print(netdissect_options *ndo,
                 return l2info.header_len;
         }
 
-        if (p[0] == 0x03) { /* Cisco style NLPID encaps ? */
+        if (EXTRACT_U_1(p) == 0x03) { /* Cisco style NLPID encaps ? */
             isoclns_print(ndo, p + 1, l2info.length - 1);
             /* FIXME check if frame was recognized */
             return l2info.header_len;
@@ -1034,7 +1034,7 @@ juniper_atm2_if_print(netdissect_options *ndo,
             return l2info.header_len;
         }
 
-        if (p[0] == 0x03) { /* Cisco style NLPID encaps ? */
+        if (EXTRACT_U_1(p) == 0x03) { /* Cisco style NLPID encaps ? */
             isoclns_print(ndo, p + 1, l2info.length - 1);
             /* FIXME check if frame was recognized */
             return l2info.header_len;
@@ -1089,7 +1089,7 @@ static int
 ip_heuristic_guess(netdissect_options *ndo,
                    register const u_char *p, u_int length)
 {
-    switch(p[0]) {
+    switch(EXTRACT_U_1(p)) {
     case 0x45:
     case 0x46:
     case 0x47:
@@ -1317,13 +1317,13 @@ juniper_parse_header(netdissect_options *ndo,
     l2info->caplen -= l2info->header_len;
 
     /* search through the cookie table and copy values matching for our PIC type */
-    ND_TCHECK(p[0]);
+    ND_TCHECK_1(p);
     while (lp->s != NULL) {
         if (lp->pictype == l2info->pictype) {
 
             l2info->cookie_len += lp->cookie_len;
 
-            switch (p[0]) {
+            switch (EXTRACT_U_1(p)) {
             case LS_COOKIE_ID:
                 l2info->cookie_type = LS_COOKIE_ID;
                 l2info->cookie_len += 2;
@@ -1342,7 +1342,7 @@ juniper_parse_header(netdissect_options *ndo,
 #ifdef DLT_JUNIPER_MFR
             /* MFR child links don't carry cookies */
             if (l2info->pictype == DLT_JUNIPER_MFR &&
-                (p[0] & MFR_BE_MASK) == MFR_BE_MASK) {
+                (EXTRACT_U_1(p) & MFR_BE_MASK) == MFR_BE_MASK) {
                 l2info->cookie_len = 0;
             }
 #endif

@@ -609,7 +609,7 @@ print_attr_string(netdissect_options *ndo,
       case TUNNEL_ASSIGN_ID:
       case TUNNEL_CLIENT_AUTH:
       case TUNNEL_SERVER_AUTH:
-           if (*data <= 0x1F)
+           if (EXTRACT_U_1(data) <= 0x1F)
            {
               if (length < 1)
                  goto trunc;
@@ -633,7 +633,7 @@ print_attr_string(netdissect_options *ndo,
    }
 
    for (i=0; i < length && EXTRACT_U_1(data); i++, data++)
-       ND_PRINT((ndo, "%c", (EXTRACT_U_1(data) < 32 || EXTRACT_U_1(data) > 126) ? '.' : EXTRACT_U_1(data)));
+       ND_PRINT((ndo, "%c", ND_ISPRINT(EXTRACT_U_1(data)) ? EXTRACT_U_1(data) : '.'));
 
    return;
 
@@ -693,7 +693,7 @@ print_vendor_attr(netdissect_options *ndo,
                vendor_type,
                vendor_length));
         for (idx = 0; idx < vendor_length ; idx++, data++)
-            ND_PRINT((ndo, "%c", (EXTRACT_U_1(data) < 32 || EXTRACT_U_1(data) > 126) ? '.' : EXTRACT_U_1(data)));
+            ND_PRINT((ndo, "%c", ND_ISPRINT(EXTRACT_U_1(data)) ? EXTRACT_U_1(data) : '.'));
         length-=vendor_length;
     }
     return;
@@ -907,7 +907,7 @@ print_attr_netmask6(netdissect_options *ndo,
        return;
    }
    ND_TCHECK2(data[0], length);
-   if (data[1] > 128)
+   if (EXTRACT_U_1(data + 1) > 128)
    {
       ND_PRINT((ndo, "ERROR: netmask %u not in range (0..128)", EXTRACT_U_1(data + 1)));
       return;
@@ -919,7 +919,7 @@ print_attr_netmask6(netdissect_options *ndo,
 
    ND_PRINT((ndo, "%s/%u", ip6addr_string(ndo, data2), EXTRACT_U_1(data + 1)));
 
-   if (data[1] > 8 * (length - 2))
+   if (EXTRACT_U_1(data + 1) > 8 * (length - 2))
       ND_PRINT((ndo, " (inconsistent prefix length)"));
 
    return;

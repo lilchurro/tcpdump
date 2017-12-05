@@ -48,7 +48,7 @@ ip6_sopt_print(netdissect_options *ndo, const u_char *bp, int len)
     int optlen;
 
     for (i = 0; i < len; i += optlen) {
-	if (bp[i] == IP6OPT_PAD1)
+	if (EXTRACT_U_1(bp + i) == IP6OPT_PAD1)
 	    optlen = 1;
 	else {
 	    if (i + 1 < len)
@@ -59,7 +59,7 @@ ip6_sopt_print(netdissect_options *ndo, const u_char *bp, int len)
 	if (i + optlen > len)
 	    goto trunc;
 
-	switch (bp[i]) {
+	switch (EXTRACT_U_1(bp + i)) {
 	case IP6OPT_PAD1:
             ND_PRINT((ndo, ", pad1"));
 	    break;
@@ -94,7 +94,7 @@ ip6_opt_print(netdissect_options *ndo, const u_char *bp, int len)
     if (len == 0)
         return;
     for (i = 0; i < len; i += optlen) {
-	if (bp[i] == IP6OPT_PAD1)
+	if (EXTRACT_U_1(bp + i) == IP6OPT_PAD1)
 	    optlen = 1;
 	else {
 	    if (i + 1 < len)
@@ -105,7 +105,7 @@ ip6_opt_print(netdissect_options *ndo, const u_char *bp, int len)
 	if (i + optlen > len)
 	    goto trunc;
 
-	switch (bp[i]) {
+	switch (EXTRACT_U_1(bp + i)) {
 	case IP6OPT_PAD1:
             ND_PRINT((ndo, "(pad1)"));
 	    break;
@@ -121,7 +121,7 @@ ip6_opt_print(netdissect_options *ndo, const u_char *bp, int len)
 		ND_PRINT((ndo, "(rtalert: trunc)"));
 		goto trunc;
 	    }
-	    if (bp[i + 1] != IP6OPT_RTALERT_LEN - 2) {
+	    if (EXTRACT_U_1(bp + i + 1) != IP6OPT_RTALERT_LEN - 2) {
 		ND_PRINT((ndo, "(rtalert: invalid len %d)", EXTRACT_U_1(bp + i + 1)));
 		goto trunc;
 	    }
@@ -132,7 +132,7 @@ ip6_opt_print(netdissect_options *ndo, const u_char *bp, int len)
 		ND_PRINT((ndo, "(jumbo: trunc)"));
 		goto trunc;
 	    }
-	    if (bp[i + 1] != IP6OPT_JUMBO_LEN - 2) {
+	    if (EXTRACT_U_1(bp + i + 1) != IP6OPT_JUMBO_LEN - 2) {
 		ND_PRINT((ndo, "(jumbo: invalid len %d)", EXTRACT_U_1(bp + i + 1)));
 		goto trunc;
 	    }
@@ -143,14 +143,14 @@ ip6_opt_print(netdissect_options *ndo, const u_char *bp, int len)
 		ND_PRINT((ndo, "(homeaddr: trunc)"));
 		goto trunc;
 	    }
-	    if (bp[i + 1] < IP6OPT_HOMEADDR_MINLEN - 2) {
+	    if (EXTRACT_U_1(bp + i + 1) < IP6OPT_HOMEADDR_MINLEN - 2) {
 		ND_PRINT((ndo, "(homeaddr: invalid len %d)", EXTRACT_U_1(bp + i + 1)));
 		goto trunc;
 	    }
 	    ND_PRINT((ndo, "(homeaddr: %s", ip6addr_string(ndo, bp + i + 2)));
-            if (bp[i + 1] > IP6OPT_HOMEADDR_MINLEN - 2) {
-		ip6_sopt_print(ndo, &bp[i + IP6OPT_HOMEADDR_MINLEN],
-		    (optlen - IP6OPT_HOMEADDR_MINLEN));
+            if (EXTRACT_U_1(bp + i + 1) > IP6OPT_HOMEADDR_MINLEN - 2) {
+		ip6_sopt_print(ndo, bp + i + IP6OPT_HOMEADDR_MINLEN,
+                               (optlen - IP6OPT_HOMEADDR_MINLEN));
 	    }
             ND_PRINT((ndo, ")"));
 	    break;
