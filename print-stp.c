@@ -93,7 +93,9 @@ stp_print_bridge_id(const u_char *p)
 
     snprintf(bridge_id_str, sizeof(bridge_id_str),
              "%.2x%.2x.%.2x:%.2x:%.2x:%.2x:%.2x:%.2x",
-             p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
+             EXTRACT_U_1(p), EXTRACT_U_1(p + 1), EXTRACT_U_1(p + 2),
+             EXTRACT_U_1(p + 3), EXTRACT_U_1(p + 4), EXTRACT_U_1(p + 5),
+             EXTRACT_U_1(p + 6), EXTRACT_U_1(p + 7));
 
     return bridge_id_str;
 }
@@ -303,7 +305,7 @@ stp_print_mstp_bpdu(netdissect_options *ndo, const struct stp_bpdu_ *stp_bpdu,
     ND_PRINT((ndo, "\n\tCIST bridge-id %s, ",
            stp_print_bridge_id(ptr + MST_BPDU_CIST_BRIDGE_ID_OFFSET)));
 
-    ND_TCHECK(ptr[MST_BPDU_CIST_REMAIN_HOPS_OFFSET]);
+    ND_TCHECK_1(ptr + MST_BPDU_CIST_REMAIN_HOPS_OFFSET);
     ND_PRINT((ndo, "CIST remaining-hops %d", EXTRACT_U_1(ptr + MST_BPDU_CIST_REMAIN_HOPS_OFFSET)));
 
     /* Dump all MSTI's */

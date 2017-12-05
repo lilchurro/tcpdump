@@ -429,7 +429,7 @@ asn1_parse(netdissect_options *ndo,
 		ND_PRINT((ndo, "[nothing to parse]"));
 		return -1;
 	}
-	ND_TCHECK(*p);
+	ND_TCHECK_1(p);
 
 	/*
 	 * it would be nice to use a bit field, but you can't depend on them.
@@ -464,7 +464,7 @@ asn1_parse(netdissect_options *ndo,
 		 * that won't fit in 32 bits.
 		 */
 		id = 0;
-		ND_TCHECK(*p);
+		ND_TCHECK_1(p);
 		while (EXTRACT_U_1(p) & ASN_BIT8) {
 			if (len < 1) {
 				ND_PRINT((ndo, "[Xtagfield?]"));
@@ -474,13 +474,13 @@ asn1_parse(netdissect_options *ndo,
 			len--;
 			hdr++;
 			p++;
-			ND_TCHECK(*p);
+			ND_TCHECK_1(p);
 		}
 		if (len < 1) {
 			ND_PRINT((ndo, "[Xtagfield?]"));
 			return -1;
 		}
-		ND_TCHECK(*p);
+		ND_TCHECK_1(p);
 		elem->id = id = (id << 7) | EXTRACT_U_1(p);
 		--len;
 		++hdr;
@@ -490,7 +490,7 @@ asn1_parse(netdissect_options *ndo,
 		ND_PRINT((ndo, "[no asnlen]"));
 		return -1;
 	}
-	ND_TCHECK(*p);
+	ND_TCHECK_1(p);
 	elem->asnlen = *p;
 	p++; len--; hdr++;
 	if (elem->asnlen & ASN_BIT8) {
@@ -543,7 +543,7 @@ asn1_parse(netdissect_options *ndo,
 					ND_PRINT((ndo, "[asnlen=0]"));
 					return -1;
 				}
-				if (*p & ASN_BIT8)	/* negative */
+				if (EXTRACT_U_1(p) & ASN_BIT8)	/* negative */
 					data = -1;
 				for (i = elem->asnlen; i-- > 0; p++)
 					data = (data << ASN_SHIFT8) | EXTRACT_U_1(p);
@@ -701,7 +701,7 @@ asn1_print_string(netdissect_options *ndo, struct be *elem)
 	p = elem->data.str;
 	ND_TCHECK2(*p, asnlen);
 	for (i = asnlen; printable && i-- > 0; p++)
-		printable = ND_ISPRINT(*p);
+		printable = ND_ISPRINT(EXTRACT_U_1(p));
 	p = elem->data.str;
 	if (printable) {
 		ND_PRINT((ndo, "\""));
@@ -770,9 +770,9 @@ asn1_print(netdissect_options *ndo,
 		}
 
 		for (; i-- > 0; p++) {
-			ND_TCHECK(*p);
+			ND_TCHECK_1(p);
 			o = (o << ASN_SHIFT7) + (*p & ~ASN_BIT8);
-			if (*p & ASN_LONGLEN)
+			if (EXTRACT_U_1(p) & ASN_LONGLEN)
 			        continue;
 
 			/*
@@ -922,9 +922,9 @@ smi_decode_oid(netdissect_options *ndo,
 	unsigned int firstval;
 
 	for (*oidlen = 0; i-- > 0; p++) {
-		ND_TCHECK(*p);
+		ND_TCHECK_1(p);
 	        o = (o << ASN_SHIFT7) + (*p & ~ASN_BIT8);
-		if (*p & ASN_LONGLEN)
+		if (EXTRACT_U_1(p) & ASN_LONGLEN)
 		    continue;
 
 		/*

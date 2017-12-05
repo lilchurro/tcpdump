@@ -145,7 +145,8 @@ name_interpret(netdissect_options *ndo,
 	ND_TCHECK_2(in);
 	if (in + 1 >= maxbuf)
 	    return(-1);	/* name goes past the end of the buffer */
-	if (in[0] < 'A' || in[0] > 'P' || in[1] < 'A' || in[1] > 'P') {
+	if (EXTRACT_U_1(in) < 'A' || EXTRACT_U_1(in) > 'P' ||
+	    EXTRACT_U_1(in + 1) < 'A' || EXTRACT_U_1(in + 1) > 'P') {
 	    *out = 0;
 	    return(0);
 	}
@@ -252,7 +253,7 @@ print_asc(netdissect_options *ndo,
 {
     int i;
     for (i = 0; i < len; i++)
-        safeputchar(ndo, buf[i]);
+        safeputchar(ndo, EXTRACT_U_1(buf + i));
 }
 
 static const char *
@@ -281,15 +282,15 @@ smb_print_data(netdissect_options *ndo, const unsigned char *buf, int len)
 	return;
     ND_PRINT((ndo, "[%03X] ", i));
     for (i = 0; i < len; /*nothing*/) {
-        ND_TCHECK(buf[i]);
-	ND_PRINT((ndo, "%02X ", buf[i] & 0xff));
+        ND_TCHECK_1(buf + i);
+	ND_PRINT((ndo, "%02X ", EXTRACT_U_1(buf + i) & 0xff));
 	i++;
 	if (i%8 == 0)
 	    ND_PRINT((ndo, " "));
 	if (i % 16 == 0) {
-	    print_asc(ndo, &buf[i - 16], 8);
+	    print_asc(ndo, buf + i - 16, 8);
 	    ND_PRINT((ndo, " "));
-	    print_asc(ndo, &buf[i - 8], 8);
+	    print_asc(ndo, buf + i - 8, 8);
 	    ND_PRINT((ndo, "\n"));
 	    if (i < len)
 		ND_PRINT((ndo, "[%03X] ", i));
@@ -306,11 +307,11 @@ smb_print_data(netdissect_options *ndo, const unsigned char *buf, int len)
 	    ND_PRINT((ndo, "   "));
 
 	n = min(8, i % 16);
-	print_asc(ndo, &buf[i - (i % 16)], n);
+	print_asc(ndo, buf + i - (i % 16), n);
 	ND_PRINT((ndo, " "));
 	n = (i % 16) - n;
 	if (n > 0)
-	    print_asc(ndo, &buf[i - n], n);
+	    print_asc(ndo, buf + i - n, n);
 	ND_PRINT((ndo, "\n"));
     }
     return;
@@ -353,7 +354,7 @@ unistr(netdissect_options *ndo,
 	 * Skip padding that puts the string on an even boundary.
 	 */
 	if (((s - startbuf) % 2) != 0) {
-	    ND_TCHECK(s[0]);
+	    ND_TCHECK_1(s);
 	    s++;
 	}
     }
@@ -365,9 +366,9 @@ unistr(netdissect_options *ndo,
 	sp = s;
 	if (!use_unicode) {
 	    for (;;) {
-		ND_TCHECK(sp[0]);
+		ND_TCHECK_1(sp);
 		*len += 1;
-		if (sp[0] == 0)
+		if (EXTRACT_U_1(sp) == 0)
 		    break;
 		sp++;
 	    }
@@ -376,7 +377,7 @@ unistr(netdissect_options *ndo,
 	    for (;;) {
 		ND_TCHECK_2(sp);
 		*len += 2;
-		if (sp[0] == 0 && sp[1] == 0)
+		if (EXTRACT_U_1(sp) == 0 && EXTRACT_U_1(sp + 1) == 0)
 		    break;
 		sp += 2;
 	    }
@@ -390,13 +391,13 @@ unistr(netdissect_options *ndo,
     }
     if (!use_unicode) {
     	while (strsize != 0) {
-          ND_TCHECK(s[0]);
+          ND_TCHECK_1(s);
 	    if (l >= MAX_UNISTR_SIZE)
 		break;
-	    if (ND_ISPRINT(s[0]))
+	    if (ND_ISPRINT(EXTRACT_U_1(s)))
 		buf[l] = s[0];
 	    else {
-		if (s[0] == 0)
+		if (EXTRACT_U_1(s) == 0)
 		    break;
 		buf[l] = '.';
 	    }
@@ -409,12 +410,12 @@ unistr(netdissect_options *ndo,
 	    ND_TCHECK_2(s);
 	    if (l >= MAX_UNISTR_SIZE)
 		break;
-	    if (s[1] == 0 && ND_ISPRINT(s[0])) {
+	    if (EXTRACT_U_1(s + 1) == 0 && ND_ISPRINT(EXTRACT_U_1(s))) {
 		/* It's a printable ASCII character */
 		buf[l] = s[0];
 	    } else {
 		/* It's a non-ASCII character or a non-printable ASCII character */
-		if (s[0] == 0 && s[1] == 0)
+		if (EXTRACT_U_1(s) == 0 && EXTRACT_U_1(s + 1) == 0)
 		    break;
 		buf[l] = '.';
 	    }
@@ -443,8 +444,8 @@ smb_fdata1(netdissect_options *ndo,
     while (*fmt && buf<maxbuf) {
 	switch (*fmt) {
 	case 'a':
-	    ND_TCHECK(buf[0]);
-	    write_bits(ndo, buf[0], attrib_fmt);
+	    ND_TCHECK_1(buf);
+	    write_bits(ndo, EXTRACT_U_1(buf), attrib_fmt);
 	    buf++;
 	    fmt++;
 	    break;
@@ -471,8 +472,8 @@ smb_fdata1(netdissect_options *ndo,
 	    strncpy(bitfmt, fmt, l);
 	    bitfmt[l] = '\0';
 	    fmt = p + 1;
-	    ND_TCHECK(buf[0]);
-	    write_bits(ndo, buf[0], bitfmt);
+	    ND_TCHECK_1(buf);
+	    write_bits(ndo, EXTRACT_U_1(buf), bitfmt);
 	    buf++;
 	    break;
 	  }
@@ -494,7 +495,7 @@ smb_fdata1(netdissect_options *ndo,
 	case 'b':
 	  {
 	    unsigned int x;
-	    ND_TCHECK(buf[0]);
+	    ND_TCHECK_1(buf);
 	    x = buf[0];
 	    ND_PRINT((ndo, "%u (0x%x)", x, x));
 	    buf += 1;
@@ -553,7 +554,7 @@ smb_fdata1(netdissect_options *ndo,
 	case 'B':
 	  {
 	    unsigned int x;
-	    ND_TCHECK(buf[0]);
+	    ND_TCHECK_1(buf);
 	    x = buf[0];
 	    ND_PRINT((ndo, "0x%X", x));
 	    buf += 1;
@@ -588,7 +589,7 @@ smb_fdata1(netdissect_options *ndo,
 	    switch (*fmt) {
 
 	    case 'b':
-		ND_TCHECK(buf[0]);
+		ND_TCHECK_1(buf);
 		stringlen = buf[0];
 		ND_PRINT((ndo, "%u", stringlen));
 		buf += 1;
@@ -635,8 +636,8 @@ smb_fdata1(netdissect_options *ndo,
 	    const char *s;
 	    uint32_t len;
 
-	    ND_TCHECK(*buf);
-	    if (*buf != 4 && *buf != 2) {
+	    ND_TCHECK_1(buf);
+	    if (EXTRACT_U_1(buf) != 4 && EXTRACT_U_1(buf) != 2) {
 		ND_PRINT((ndo, "Error! ASCIIZ buffer of type %u", EXTRACT_U_1(buf)));
 		return maxbuf;	/* give up */
 	    }
@@ -715,7 +716,7 @@ smb_fdata1(netdissect_options *ndo,
 		    name_type_str(name_type)));
 		break;
 	    case 2:
-		ND_TCHECK(buf[15]);
+		ND_TCHECK_1(buf + 15);
 		name_type = buf[15];
 		ND_PRINT((ndo, "%-15.15s NameType=0x%02X (%s)", buf, name_type,
 		    name_type_str(name_type)));
