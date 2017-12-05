@@ -32,16 +32,21 @@
 #include "tcp.h"
 #include "udp.h"
 
+// includes max packet size of IP packet, plus eth header
 #define MAXPACKET   65549
 
 
-/* Returns the pointer of the IP header or NULL if that couldn't be found. */
+/* Assumes ether type; returns pointer to IP header or NULL if not found. */
 u_char *
 get_iph_ptr(const struct pcap_pkthdr *h, u_char *bp) {
 	u_short length_type;
 	u_char *s;
 	const struct ip *ip;
 	const struct ether_header *ep = (const struct ether_header *)bp;
+
+	if (h == NULL || bp == NULL) {
+		return NULL;
+	}
 
 	if (h->caplen < ETHER_HDRLEN || h->len < ETHER_HDRLEN) {
 		return NULL;
@@ -56,6 +61,7 @@ get_iph_ptr(const struct pcap_pkthdr *h, u_char *bp) {
 	return NULL;
 }
 
+/* Converts network address string to uint */
 static uint32_t
 nd_ipv4_to_network_uint(nd_ipv4 a) {
 	char ip[INET_ADDRSTRLEN];
@@ -68,6 +74,7 @@ nd_ipv4_to_network_uint(nd_ipv4 a) {
 	return ip_uint;
 }
 
+/* Converts network uint to address string */
 static nd_ipv4
 network_uint_to_nd_ipv4(uint32_t a) {
 	nd_ipv4 addr;
