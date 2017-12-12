@@ -499,7 +499,8 @@ rsvp_intserv_print(netdissect_options *ndo,
 
     if (obj_tlen < 4)
         return 0;
-    parameter_id = *(tptr);
+    ND_TCHECK_1(tptr);
+    parameter_id = EXTRACT_U_1(tptr);
     ND_TCHECK_2(tptr + 2);
     parameter_length = EXTRACT_BE_U_2(tptr + 2)<<2; /* convert wordcount to bytecount */
 
@@ -592,7 +593,7 @@ rsvp_intserv_print(netdissect_options *ndo,
         */
 
         if (parameter_length == 20) {
-	    ND_TCHECK2(*(tptr + 4), 20);
+	    ND_TCHECK_LEN(tptr + 4, 20);
             bw.i = EXTRACT_BE_U_4(tptr + 4);
             ND_PRINT((ndo, "\n\t\tToken Bucket Rate: %.10g Mbps", bw.f / 125000));
             bw.i = EXTRACT_BE_U_4(tptr + 8);
@@ -681,7 +682,7 @@ rsvp_obj_print(netdissect_options *ndo,
 
     while(tlen>=sizeof(struct rsvp_object_header)) {
         /* did we capture enough for fully decoding the object header ? */
-        ND_TCHECK2(*tptr, sizeof(struct rsvp_object_header));
+        ND_TCHECK_LEN(tptr, sizeof(struct rsvp_object_header));
 
         rsvp_obj_header = (const struct rsvp_object_header *)tptr;
         rsvp_obj_len=EXTRACT_BE_U_2(rsvp_obj_header->length);
@@ -725,7 +726,7 @@ rsvp_obj_print(netdissect_options *ndo,
         obj_tlen=rsvp_obj_len-sizeof(struct rsvp_object_header);
 
         /* did we capture enough for fully decoding the object ? */
-        if (!ND_TTEST2(*tptr, rsvp_obj_len))
+        if (!ND_TTEST_LEN(tptr, rsvp_obj_len))
             return -1;
         hexdump=FALSE;
 

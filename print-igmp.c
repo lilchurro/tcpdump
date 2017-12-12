@@ -124,7 +124,7 @@ print_mtrace(netdissect_options *ndo,
         ipaddr_string(ndo, tr->tr_src), ipaddr_string(ndo, tr->tr_dst),
         ipaddr_string(ndo, tr->tr_raddr)));
     if (IN_CLASSD(EXTRACT_BE_U_4(tr->tr_raddr)))
-        ND_PRINT((ndo, " with-ttl %u", EXTRACT_U_1(&tr->tr_rttl)));
+        ND_PRINT((ndo, " with-ttl %u", EXTRACT_U_1(tr->tr_rttl)));
     return;
 trunc:
     ND_PRINT((ndo, "%s", tstr));
@@ -146,7 +146,7 @@ print_mresp(netdissect_options *ndo,
         ipaddr_string(ndo, tr->tr_src), ipaddr_string(ndo, tr->tr_dst),
         ipaddr_string(ndo, tr->tr_raddr)));
     if (IN_CLASSD(EXTRACT_BE_U_4(tr->tr_raddr)))
-        ND_PRINT((ndo, " with-ttl %u", EXTRACT_U_1(&tr->tr_rttl)));
+        ND_PRINT((ndo, " with-ttl %u", EXTRACT_U_1(tr->tr_rttl)));
     return;
 trunc:
     ND_PRINT((ndo, "%s", tstr));
@@ -334,7 +334,7 @@ igmp_print(netdissect_options *ndo,
         break;
     }
 
-    if (ndo->ndo_vflag && len >= 4 && ND_TTEST2(bp[0], len)) {
+    if (ndo->ndo_vflag && len >= 4 && ND_TTEST_LEN(bp, len)) {
         /* Check the IGMP checksum */
         vec[0].ptr = bp;
         vec[0].len = len;

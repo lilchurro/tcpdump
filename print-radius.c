@@ -586,14 +586,14 @@ print_attr_string(netdissect_options *ndo,
 {
    register u_int i;
 
-   ND_TCHECK2(data[0],length);
+   ND_TCHECK_LEN(data, length);
 
    switch(attr_code)
    {
       case TUNNEL_PASS:
            if (length < 3)
               goto trunc;
-           if (*data && (*data <=0x1F) )
+           if (EXTRACT_U_1(data) && (EXTRACT_U_1(data) <= 0x1F))
               ND_PRINT((ndo, "Tag[%u] ", EXTRACT_U_1(data)));
            else
               ND_PRINT((ndo, "Tag[Unused] "));
@@ -613,7 +613,7 @@ print_attr_string(netdissect_options *ndo,
            {
               if (length < 1)
                  goto trunc;
-              if (*data)
+              if (EXTRACT_U_1(data))
                 ND_PRINT((ndo, "Tag[%u] ", EXTRACT_U_1(data)));
               else
                 ND_PRINT((ndo, "Tag[Unused] "));
@@ -667,7 +667,7 @@ print_vendor_attr(netdissect_options *ndo,
     while (length >= 2) {
 	ND_TCHECK_2(data);
 
-        vendor_type = *(data);
+        vendor_type = EXTRACT_U_1(data);
         vendor_length = EXTRACT_U_1(data + 1);
 
         if (vendor_length < 2)
@@ -687,7 +687,7 @@ print_vendor_attr(netdissect_options *ndo,
         data+=2;
         vendor_length-=2;
         length-=2;
-	ND_TCHECK2(*data, vendor_length);
+	ND_TCHECK_LEN(data, vendor_length);
 
         ND_PRINT((ndo, "\n\t    Vendor Attribute: %u, Length: %u, Value: ",
                vendor_type,
@@ -731,7 +731,7 @@ print_attr_num(netdissect_options *ndo,
 
       if ( (attr_code == TUNNEL_TYPE) || (attr_code == TUNNEL_MEDIUM) )
       {
-         if (!*data)
+         if (!EXTRACT_U_1(data))
             ND_PRINT((ndo, "Tag[Unused] "));
          else
             ND_PRINT((ndo, "Tag[%d] ", EXTRACT_U_1(data)));
@@ -795,7 +795,7 @@ print_attr_num(netdissect_options *ndo,
           break;
 
         case TUNNEL_PREFERENCE:
-            if (*data)
+            if (EXTRACT_U_1(data))
                ND_PRINT((ndo, "Tag[%d] ", EXTRACT_U_1(data)));
             else
                ND_PRINT((ndo, "Tag[Unused] "));
@@ -906,7 +906,7 @@ print_attr_netmask6(netdissect_options *ndo,
        ND_PRINT((ndo, "ERROR: length %u not in range (2..18)", length));
        return;
    }
-   ND_TCHECK2(data[0], length);
+   ND_TCHECK_LEN(data, length);
    if (EXTRACT_U_1(data + 1) > 128)
    {
       ND_PRINT((ndo, "ERROR: netmask %u not in range (0..128)", EXTRACT_U_1(data + 1)));
@@ -1002,7 +1002,7 @@ print_attr_strange(netdissect_options *ndo,
                return;
            }
            ND_TCHECK_1(data);
-           if (*data)
+           if (EXTRACT_U_1(data))
               ND_PRINT((ndo, "User can change password"));
            else
               ND_PRINT((ndo, "User cannot change password"));
@@ -1121,7 +1121,7 @@ radius_print(netdissect_options *ndo,
    register const struct radius_hdr *rad;
    u_int len, auth_idx;
 
-   ND_TCHECK2(*dat, MIN_RADIUS_LEN);
+   ND_TCHECK_LEN(dat, MIN_RADIUS_LEN);
    rad = (const struct radius_hdr *)dat;
    len = EXTRACT_BE_U_2(&rad->len);
 

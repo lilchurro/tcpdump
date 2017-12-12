@@ -103,7 +103,7 @@ interpret_long_date(const u_char *p)
     time_t ret;
 
     /* this gives us seconds since jan 1st 1601 (approx) */
-    d = (EXTRACT_LE_U_4(p + 4) * 256.0 + p[3]) * (1.0e-7 * (1 << 24));
+    d = (EXTRACT_LE_U_4(p + 4) * 256.0 + EXTRACT_U_1(p + 3)) * (1.0e-7 * (1 << 24));
 
     /* now adjust by 369 years to make the secs since 1970 */
     d -= 369.0 * 365.25 * 24 * 60 * 60;
@@ -150,7 +150,7 @@ name_interpret(netdissect_options *ndo,
 	    *out = 0;
 	    return(0);
 	}
-	*out = ((in[0] - 'A') << 4) + (in[1] - 'A');
+	*out = ((EXTRACT_U_1(in) - 'A') << 4) + (EXTRACT_U_1(in + 1) - 'A');
 	in += 2;
 	out++;
     }
@@ -178,7 +178,7 @@ name_ptr(netdissect_options *ndo,
 	return(NULL);	/* name goes past the end of the buffer */
     ND_TCHECK_1(p);
 
-    c = *p;
+    c = EXTRACT_U_1(p);
 
     /* XXX - this should use the same code that the DNS dissector does */
     if ((c & 0xC0) == 0xC0) {
@@ -231,7 +231,7 @@ name_len(netdissect_options *ndo,
     if (s >= maxbuf)
 	return(-1);	/* name goes past the end of the buffer */
     ND_TCHECK_1(s);
-    c = *s;
+    c = EXTRACT_U_1(s);
     if ((c & 0xC0) == 0xC0)
 	return(2);
     while (*s) {
@@ -395,7 +395,7 @@ unistr(netdissect_options *ndo,
 	    if (l >= MAX_UNISTR_SIZE)
 		break;
 	    if (ND_ISPRINT(EXTRACT_U_1(s)))
-		buf[l] = s[0];
+		buf[l] = EXTRACT_U_1(s);
 	    else {
 		if (EXTRACT_U_1(s) == 0)
 		    break;
@@ -412,7 +412,7 @@ unistr(netdissect_options *ndo,
 		break;
 	    if (EXTRACT_U_1(s + 1) == 0 && ND_ISPRINT(EXTRACT_U_1(s))) {
 		/* It's a printable ASCII character */
-		buf[l] = s[0];
+		buf[l] = EXTRACT_U_1(s);
 	    } else {
 		/* It's a non-ASCII character or a non-printable ASCII character */
 		if (EXTRACT_U_1(s) == 0 && EXTRACT_U_1(s + 1) == 0)
@@ -481,7 +481,7 @@ smb_fdata1(netdissect_options *ndo,
 	case 'P':
 	  {
 	    int l = atoi(fmt + 1);
-	    ND_TCHECK2(buf[0], l);
+	    ND_TCHECK_LEN(buf, l);
 	    buf += l;
 	    fmt++;
 	    while (isdigit((unsigned char)*fmt))
@@ -496,7 +496,7 @@ smb_fdata1(netdissect_options *ndo,
 	  {
 	    unsigned int x;
 	    ND_TCHECK_1(buf);
-	    x = buf[0];
+	    x = EXTRACT_U_1(buf);
 	    ND_PRINT((ndo, "%u (0x%x)", x, x));
 	    buf += 1;
 	    fmt++;
@@ -555,7 +555,7 @@ smb_fdata1(netdissect_options *ndo,
 	  {
 	    unsigned int x;
 	    ND_TCHECK_1(buf);
-	    x = buf[0];
+	    x = EXTRACT_U_1(buf);
 	    ND_PRINT((ndo, "0x%X", x));
 	    buf += 1;
 	    fmt++;
@@ -590,7 +590,7 @@ smb_fdata1(netdissect_options *ndo,
 
 	    case 'b':
 		ND_TCHECK_1(buf);
-		stringlen = buf[0];
+		stringlen = EXTRACT_U_1(buf);
 		ND_PRINT((ndo, "%u", stringlen));
 		buf += 1;
 		break;
@@ -653,7 +653,7 @@ smb_fdata1(netdissect_options *ndo,
 	case 's':
 	  {
 	    int l = atoi(fmt + 1);
-	    ND_TCHECK2(*buf, l);
+	    ND_TCHECK_LEN(buf, l);
 	    ND_PRINT((ndo, "%-*.*s", l, l, buf));
 	    buf += l;
 	    fmt++;
@@ -663,7 +663,7 @@ smb_fdata1(netdissect_options *ndo,
 	  }
 	case 'c':
 	  {
-	    ND_TCHECK2(*buf, stringlen);
+	    ND_TCHECK_LEN(buf, stringlen);
 	    ND_PRINT((ndo, "%-*.*s", (int)stringlen, (int)stringlen, buf));
 	    buf += stringlen;
 	    fmt++;
@@ -685,7 +685,7 @@ smb_fdata1(netdissect_options *ndo,
 	case 'h':
 	  {
 	    int l = atoi(fmt + 1);
-	    ND_TCHECK2(*buf, l);
+	    ND_TCHECK_LEN(buf, l);
 	    while (l--) {
 		ND_PRINT((ndo, "%02x", EXTRACT_U_1(buf)));
 		buf++;
@@ -717,7 +717,7 @@ smb_fdata1(netdissect_options *ndo,
 		break;
 	    case 2:
 		ND_TCHECK_1(buf + 15);
-		name_type = buf[15];
+		name_type = EXTRACT_U_1(buf + 15);
 		ND_PRINT((ndo, "%-15.15s NameType=0x%02X (%s)", buf, name_type,
 		    name_type_str(name_type)));
 		buf += 16;

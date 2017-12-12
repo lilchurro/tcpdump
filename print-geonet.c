@@ -64,8 +64,8 @@ print_btp_body(netdissect_options *ndo,
 	const char *msg_type_str;
 
 	/* Assuming ItsDpuHeader */
-	version = bp[0];
-	msg_type = bp[1];
+	version = EXTRACT_U_1(bp);
+	msg_type = EXTRACT_U_1(bp + 1);
 	msg_type_str = tok2str(msg_type_values, "unknown (%u)", msg_type);
 
 	ND_PRINT((ndo, "; ItsPduHeader v:%d t:%d-%s", version, msg_type, msg_type_str));
@@ -86,7 +86,7 @@ print_long_pos_vector(netdissect_options *ndo,
 {
 	uint32_t lat, lon;
 
-	if (!ND_TTEST2(*bp, GEONET_ADDR_LEN))
+	if (!ND_TTEST_LEN(bp, GEONET_ADDR_LEN))
 		return (-1);
 	ND_PRINT((ndo, "GN_ADDR:%s ", linkaddr_string (ndo, bp, 0, GEONET_ADDR_LEN)));
 
@@ -128,12 +128,12 @@ geonet_print(netdissect_options *ndo, const u_char *bp, u_int length,
 		goto invalid;
 
 	ND_TCHECK_8(bp);
-	version = bp[0] >> 4;
-	next_hdr = bp[0] & 0x0f;
-	hdr_type = bp[1] >> 4;
-	hdr_subtype = bp[1] & 0x0f;
+	version = EXTRACT_U_1(bp) >> 4;
+	next_hdr = EXTRACT_U_1(bp) & 0x0f;
+	hdr_type = EXTRACT_U_1(bp + 1) >> 4;
+	hdr_subtype = EXTRACT_U_1(bp + 1) & 0x0f;
 	payload_length = EXTRACT_BE_U_2(bp + 4);
-	hop_limit = bp[7];
+	hop_limit = EXTRACT_U_1(bp + 7);
 
 	switch (next_hdr) {
 		case 0: next_hdr_txt = "Any"; break;
@@ -232,7 +232,7 @@ geonet_print(netdissect_options *ndo, const u_char *bp, u_int length,
 	if (hdr_size >= 0) {
 		if (length < (u_int)hdr_size)
 			goto invalid;
-		ND_TCHECK2(*bp, hdr_size);
+		ND_TCHECK_LEN(bp, hdr_size);
 		length -= hdr_size;
 		bp += hdr_size;
 		switch (next_hdr) {

@@ -76,8 +76,8 @@ struct tha {
 struct tcp_seq_hash {
         struct tcp_seq_hash *nxt;
         struct tha addr;
-        tcp_seq seq;
-        tcp_seq ack;
+        uint32_t seq;
+        uint32_t ack;
 };
 
 struct tha6 {
@@ -89,8 +89,8 @@ struct tha6 {
 struct tcp_seq_hash6 {
         struct tcp_seq_hash6 *nxt;
         struct tha6 addr;
-        tcp_seq seq;
-        tcp_seq ack;
+        uint32_t seq;
+        uint32_t ack;
 };
 
 #define TSEQ_HASHSIZE 919
@@ -187,11 +187,11 @@ tcp_print(netdissect_options *ndo,
                 return;
         }
 
-        sport = EXTRACT_BE_U_2(&tp->th_sport);
-        dport = EXTRACT_BE_U_2(&tp->th_dport);
+        sport = EXTRACT_BE_U_2(tp->th_sport);
+        dport = EXTRACT_BE_U_2(tp->th_dport);
 
         if (ip6) {
-                if (ip6->ip6_nxt == IPPROTO_TCP) {
+                if (EXTRACT_U_1(ip6->ip6_nxt) == IPPROTO_TCP) {
                         ND_PRINT((ndo, "%s.%s > %s.%s: ",
                                      ip6addr_string(ndo, &ip6->ip6_src),
                                      tcpport_string(ndo, sport),
@@ -202,7 +202,7 @@ tcp_print(netdissect_options *ndo,
                                      tcpport_string(ndo, sport), tcpport_string(ndo, dport)));
                 }
         } else {
-                if (ip->ip_p == IPPROTO_TCP) {
+                if (EXTRACT_U_1(ip->ip_p) == IPPROTO_TCP) {
                         ND_PRINT((ndo, "%s.%s > %s.%s: ",
                                      ipaddr_string(ndo, &ip->ip_src),
                                      tcpport_string(ndo, sport),
@@ -224,10 +224,10 @@ tcp_print(netdissect_options *ndo,
                 return;
         }
 
-        seq = EXTRACT_BE_U_4(&tp->th_seq);
-        ack = EXTRACT_BE_U_4(&tp->th_ack);
-        win = EXTRACT_BE_U_2(&tp->th_win);
-        urp = EXTRACT_BE_U_2(&tp->th_urp);
+        seq = EXTRACT_BE_U_4(tp->th_seq);
+        ack = EXTRACT_BE_U_4(tp->th_ack);
+        win = EXTRACT_BE_U_2(tp->th_win);
+        urp = EXTRACT_BE_U_2(tp->th_urp);
 
         if (ndo->ndo_qflag) {
                 ND_PRINT((ndo, "tcp %d", length - hlen));
@@ -238,7 +238,7 @@ tcp_print(netdissect_options *ndo,
                 return;
         }
 
-        flags = tp->th_flags;
+        flags = EXTRACT_U_1(tp->th_flags);
         ND_PRINT((ndo, "Flags [%s]", bittok2str_nosep(tcp_flag_values, "none", flags)));
 
         if (!ndo->ndo_Sflag && (flags & TH_ACK)) {
@@ -372,7 +372,7 @@ tcp_print(netdissect_options *ndo,
                 if (IP_V(ip) == 4) {
                         if (ND_TTEST2(tp->th_sport, length)) {
                                 sum = tcp_cksum(ndo, ip, tp, length);
-                                tcp_sum = EXTRACT_BE_U_2(&tp->th_sum);
+                                tcp_sum = EXTRACT_BE_U_2(tp->th_sum);
 
                                 ND_PRINT((ndo, ", cksum 0x%04x", tcp_sum));
                                 if (sum != 0)
@@ -384,7 +384,7 @@ tcp_print(netdissect_options *ndo,
                 } else if (IP_V(ip) == 6 && ip6->ip6_plen) {
                         if (ND_TTEST2(tp->th_sport, length)) {
                                 sum = tcp6_cksum(ndo, ip6, tp, length);
-                                tcp_sum = EXTRACT_BE_U_2(&tp->th_sum);
+                                tcp_sum = EXTRACT_BE_U_2(tp->th_sum);
 
                                 ND_PRINT((ndo, ", cksum 0x%04x", tcp_sum));
                                 if (sum != 0)
@@ -445,7 +445,7 @@ tcp_print(netdissect_options *ndo,
                         datalen = 0;
 
 /* Bail if "l" bytes of data are not left or were not captured  */
-#define LENCHECK(l) { if ((l) > hlen) goto bad; ND_TCHECK2(*cp, l); }
+#define LENCHECK(l) { if ((l) > hlen) goto bad; ND_TCHECK_LEN(cp, l); }
 
 
                         ND_PRINT((ndo, "%s", tok2str(tcp_option_values, "unknown-%u", opt)));
@@ -796,7 +796,7 @@ print_tcp_rst_data(netdissect_options *ndo,
 {
         int c;
 
-        ND_PRINT((ndo, ND_TTEST2(*sp, length) ? " [RST" : " [!RST"));
+        ND_PRINT((ndo, ND_TTEST_LEN(sp, length) ? " [RST" : " [!RST"));
         if (length > MAX_RST_DATA_LEN) {
                 length = MAX_RST_DATA_LEN;	/* can use -X for longer */
                 ND_PRINT((ndo, "+"));			/* indicate we truncate */
@@ -871,14 +871,14 @@ tcp_verify_signature(netdissect_options *ndo,
                 MD5_Update(&ctx, (const char *)&ip->ip_dst, sizeof(ip->ip_dst));
                 MD5_Update(&ctx, (const char *)&zero_proto, sizeof(zero_proto));
                 MD5_Update(&ctx, (const char *)&ip->ip_p, sizeof(ip->ip_p));
-                tlen = EXTRACT_BE_U_2(&ip->ip_len) - IP_HL(ip) * 4;
+                tlen = EXTRACT_BE_U_2(ip->ip_len) - IP_HL(ip) * 4;
                 tlen = htons(tlen);
                 MD5_Update(&ctx, (const char *)&tlen, sizeof(tlen));
         } else if (IP_V(ip) == 6) {
                 ip6 = (const struct ip6_hdr *)ip;
                 MD5_Update(&ctx, (const char *)&ip6->ip6_src, sizeof(ip6->ip6_src));
                 MD5_Update(&ctx, (const char *)&ip6->ip6_dst, sizeof(ip6->ip6_dst));
-                len32 = htonl(EXTRACT_BE_U_2(&ip6->ip6_plen));
+                len32 = htonl(EXTRACT_BE_U_2(ip6->ip6_plen));
                 MD5_Update(&ctx, (const char *)&len32, sizeof(len32));
                 nxt = 0;
                 MD5_Update(&ctx, (const char *)&nxt, sizeof(nxt));
@@ -895,10 +895,10 @@ tcp_verify_signature(netdissect_options *ndo,
          * Step 2: Update MD5 hash with TCP header, excluding options.
          * The TCP checksum must be set to zero.
          */
-        savecsum = tp1.th_sum;
-        tp1.th_sum = 0;
+        memcpy(&savecsum, tp1.th_sum, sizeof(savecsum));
+        memset(tp1.th_sum, 0, sizeof(tp1.th_sum));
         MD5_Update(&ctx, (const char *)&tp1, sizeof(struct tcphdr));
-        tp1.th_sum = savecsum;
+        memcpy(tp1.th_sum, &savecsum, sizeof(tp1.th_sum));
         /*
          * Step 3: Update MD5 hash with TCP segment data, if present.
          */
