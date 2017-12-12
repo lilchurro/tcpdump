@@ -190,8 +190,8 @@ static int Wflag;			/* recycle output files after this number of files */
 static int WflagChars;
 static char *zflag = NULL;		/* compress each savefile using a specified command (like gzip or bzip2) */
 static int immediate_mode;
-static int no_payload = 0;       /* CyberReboot: ndo_0flag copy; clear away payload */
-static int mask_external_ip = 0; /* CyberReboot: ndo_starflag copy; mask external IPs */
+static int no_payload = 0;       /* CyberReboot: sets option to clear away payload */
+static int mask_external_ip = 0; /* CyberReboot: sets option to mask external IPs */
 
 static int infodelay;
 static int infoprint;
@@ -604,6 +604,9 @@ show_remote_devices_and_exit(void)
 #define OPTION_IMMEDIATE_MODE		130
 #define OPTION_PRINT			131
 #define OPTION_LIST_REMOTE_INTERFACES	132
+#define OPTION_MASK_EXTERNAL		133
+#define OPTION_ZERO_TCPUDP_PAYLOAD	134
+#define OPTION_NO_TCPUDP_PAYLOAD	135
 
 static const struct option longopts[] = {
 #if defined(HAVE_PCAP_CREATE) || defined(_WIN32)
@@ -644,8 +647,13 @@ static const struct option longopts[] = {
 #ifdef HAVE_PCAP_SET_PARSER_DEBUG
 	{ "debug-filter-parser", no_argument, NULL, 'Y' },
 #endif
+	/* start: CyberReboot additions */
+	{ "mask-external-address", required_argument, NULL, OPTION_MASK_EXTERNAL },
+	{ "zero-tcpudp-payload", no_argument, NULL, OPTION_ZERO_TCPUDP_PAYLOAD },
+	{ "no-tcpudp-payload", no_argument, NULL, OPTION_NO_TCPUDP_PAYLOAD },
+	/* end: CyberReboot additions */
+
 	{ "relinquish-privileges", required_argument, NULL, 'Z' },
-	{ "external-mask", required_argument, NULL, '*' },
 	{ "number", no_argument, NULL, '#' },
 	{ "print", no_argument, NULL, OPTION_PRINT },
 	{ "version", no_argument, NULL, OPTION_VERSION },
@@ -1710,16 +1718,22 @@ main(int argc, char **argv)
 			ndo->ndo_packet_number = 1;
 			break;
 
-		case '0':       /* CyberReboot: new flag */
-			++no_payload;
+		/* start: CyberReboot additional options */
+		case OPTION_ZERO_TCPUDP_PAYLOAD:
+			no_payload = 1;
 			break;
 
-		case '*':       /* CyberReboot: new flag */
+		case OPTION_NO_TCPUDP_PAYLOAD:
+			no_payload = 2;
+			break;
+
+		case OPTION_MASK_EXTERNAL:
 			if (verify_IP(optarg) < 0)
 				error("IP address mask is not a legal IP address");
 			++mask_external_ip;
 			dumpinfo.maskIP = optarg;
 			break;
+		/* end: CyberReboot additional options */
 
 		case OPTION_VERSION:
 			print_version();

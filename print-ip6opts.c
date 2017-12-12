@@ -52,7 +52,7 @@ ip6_sopt_print(netdissect_options *ndo, const u_char *bp, int len)
 	    optlen = 1;
 	else {
 	    if (i + 1 < len)
-		optlen = bp[i + 1] + 2;
+		optlen = EXTRACT_U_1(bp + i + 1) + 2;
 	    else
 		goto trunc;
 	}
@@ -98,7 +98,7 @@ ip6_opt_print(netdissect_options *ndo, const u_char *bp, int len)
 	    optlen = 1;
 	else {
 	    if (i + 1 < len)
-		optlen = bp[i + 1] + 2;
+		optlen = EXTRACT_U_1(bp + i + 1) + 2;
 	    else
 		goto trunc;
 	}
@@ -177,8 +177,8 @@ hbhopt_print(netdissect_options *ndo, register const u_char *bp)
     u_int hbhlen = 0;
 
     ND_TCHECK(dp->ip6h_len);
-    hbhlen = (dp->ip6h_len + 1) << 3;
-    ND_TCHECK2(*dp, hbhlen);
+    hbhlen = (EXTRACT_U_1(dp->ip6h_len) + 1) << 3;
+    ND_TCHECK_LEN(dp, hbhlen);
     ND_PRINT((ndo, "HBH "));
     if (ndo->ndo_vflag)
 	ip6_opt_print(ndo, (const u_char *)dp + sizeof(*dp), hbhlen - sizeof(*dp));
@@ -197,8 +197,8 @@ dstopt_print(netdissect_options *ndo, register const u_char *bp)
     u_int dstoptlen = 0;
 
     ND_TCHECK(dp->ip6d_len);
-    dstoptlen = (dp->ip6d_len + 1) << 3;
-    ND_TCHECK2(*dp, dstoptlen);
+    dstoptlen = (EXTRACT_U_1(dp->ip6d_len) + 1) << 3;
+    ND_TCHECK_LEN(dp, dstoptlen);
     ND_PRINT((ndo, "DSTOPT "));
     if (ndo->ndo_vflag) {
 	ip6_opt_print(ndo, (const u_char *)dp + sizeof(*dp),

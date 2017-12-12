@@ -175,7 +175,8 @@ print_report(netdissect_options *ndo,
 			return (0);
 		}
 		ND_TCHECK_3(bp);
-		mask = (uint32_t)0xff << 24 | bp[0] << 16 | bp[1] << 8 | bp[2];
+		mask = (uint32_t)0xff << 24 | EXTRACT_U_1(bp) << 16 |
+			EXTRACT_U_1(bp + 1) << 8 | EXTRACT_U_1(bp + 2);
 		width = 1;
 		if (EXTRACT_U_1(bp))
 			width = 2;
@@ -233,7 +234,8 @@ print_probe(netdissect_options *ndo,
 		ND_PRINT((ndo, " [|}"));
 		return (0);
 	}
-	genid = (bp[0] << 24) | (bp[1] << 16) | (bp[2] << 8) | bp[3];
+	genid = (EXTRACT_U_1(bp) << 24) | (EXTRACT_U_1(bp + 1) << 16) |
+		 (EXTRACT_U_1(bp + 2) << 8) | EXTRACT_U_1(bp + 3);
 	bp += 4;
 	len -= 4;
 	ND_PRINT((ndo, ndo->ndo_vflag > 1 ? "\n\t" : " "));
@@ -343,7 +345,7 @@ static int
 print_prune(netdissect_options *ndo,
             register const u_char *bp)
 {
-	ND_TCHECK2(bp[0], 12);
+	ND_TCHECK_LEN(bp, 12);
 	ND_PRINT((ndo, " src %s grp %s", ipaddr_string(ndo, bp), ipaddr_string(ndo, bp + 4)));
 	bp += 8;
 	ND_PRINT((ndo, " timer "));

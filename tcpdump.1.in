@@ -27,7 +27,7 @@ tcpdump \- dump traffic on a network
 .na
 .B tcpdump
 [
-.B \-0AbdDefhHIJKlLnNOpqStuUvxX#
+.B \-AbdDefhHIJKlLnNOpqStuUvxX#
 ] [
 .B \-B
 .I buffer_size
@@ -60,10 +60,6 @@ tcpdump \- dump traffic on a network
 .B \-i
 .I interface
 ]
-.ti +8
-[
-.B \-\-immediate\-mode
-]
 [
 .B \-j
 .I tstamp_type
@@ -74,12 +70,20 @@ tcpdump \- dump traffic on a network
 ]
 .ti +8
 [
+.B \-\-mask\-external\-address
+.I mask_ip
+]
+[
 .B \-M
 .I secret
 ]
 [
+.B \-\-no\-tcpudp\-payload
+]
+[
 .B \-\-number
 ]
+.ti +8
 [
 .B \-\-print
 ]
@@ -87,7 +91,6 @@ tcpdump \- dump traffic on a network
 .B \-Q
 .I in|out|inout
 ]
-.ti +8
 [
 .B \-r
 .I file
@@ -135,15 +138,13 @@ tcpdump \- dump traffic on a network
 ]
 .ti +8
 [
-.BI \-\-external\-mask
-.I mask_ip
-]
-.ti +8
-[
 .B \-\-immediate\-mode
 ]
 [
 .B \-\-version
+]
+[
+.B \-\-zero\-tcpudp\-payload
 ]
 .ti +8
 [
@@ -230,12 +231,6 @@ special privileges; see the
 man page for details.  Reading a saved packet file doesn't require
 special privileges.
 .SH OPTIONS
-.TP
-.B \-0
-Zero out payload bytes beyond TCP or UDP headers.
-.TP
-.B \-00
-Remove payload bytes beyond TCP or UDP headers.
 .TP
 .B \-A
 Print each packet (minus its link level header) in ASCII.  Handy for
@@ -568,6 +563,9 @@ E.g.,
 if you give this flag then \fItcpdump\fP will print ``nic''
 instead of ``nic.ddn.mil''.
 .TP
+.B \-\-no\-tcpudp\-payload
+Remove payload bytes beyond TCP or UDP headers. Currently works only with IPv4.
+.TP
 .B \-#
 .PD 0
 .TP
@@ -650,10 +648,7 @@ Setting
 for backwards compatibility with recent older versions of
 .IR tcpdump .
 .TP
-.BI \-* " mask_ip"
-.PD 0
-.TP
-.BI \-\-external\-mask " mask_ip"
+.BI \-\-mask\-external\-address " mask_ip"
 .PD
 Mask external IPv4 addresses (non-RFC 1918, plus other reserved spaces)
 to the designated IP.
@@ -893,6 +888,9 @@ and the group ID to the primary group of
 .IR user .
 .IP
 This behavior can also be enabled by default at compile time.
+.TP
+.B \-\-zero\-tcpudp\-payload
+Zero out payload bytes beyond TCP or UDP headers. Currently works only with IPv4.
 .IP "\fI expression\fP"
 .RS
 selects which packets will be dumped.

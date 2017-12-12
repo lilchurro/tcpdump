@@ -24,7 +24,6 @@
 #include <inttypes.h>
 #include "netdissect.h"
 #include <pcap/pcap.h>
-#include <ether.h>
 #include "clean_cap_dump.h"
 #include "extract.h"
 #include "ethertype.h"
@@ -33,8 +32,17 @@
 #include "udp.h"
 
 // includes max packet size of IP packet, plus eth header
-#define MAXPACKET   65549
+#define MAXPACKET	65549
+#define ETHER_HDRLEN	14
 
+/*
+ * Structure of an Ethernet header.
+ */
+struct  ether_header {
+        nd_mac_addr     ether_dhost;
+        nd_mac_addr     ether_shost;
+        nd_uint16_t     ether_length_type;
+};
 
 /* Assumes ether type; returns pointer to IP header or NULL if not found. */
 u_char *
@@ -210,10 +218,13 @@ pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 		if (no_payload_flag > 0 && validate_iph_len(ip, p_len) > -1) {
 			struct ip *p = (struct ip *)ip;
 			int ph_len = IP_HL(p) * 4;
-			if (p-> ip_p != IPPROTO_TCP && p-> ip_p != IPPROTO_UDP) {
+			if (*p->ip_p != IPPROTO_TCP && *p->ip_p != IPPROTO_UDP) {
 				break;
 			}
-			if (p->ip_p == IPPROTO_TCP) {
+
+			p_end = ip + h->caplen; // here to stifle warning about being uninitialized
+
+			if (*p->ip_p == IPPROTO_TCP) {
 				struct tcphdr *t = (struct tcphdr *)(ip+ph_len);
 				p_len = TH_OFF(t) * 4;
 				if (p_len < sizeof(*t)) {
@@ -221,7 +232,7 @@ pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 				}
 				p_end = ip + ph_len + p_len;
 
-			} else if (p->ip_p == IPPROTO_UDP) {
+			} else if (*p->ip_p == IPPROTO_UDP) {
 				struct udphdr *u = (struct udphdr *)(ip+ph_len);
 				if (p_len < sizeof(struct udphdr) ||
 				    EXTRACT_BE_U_2(&u->uh_ulen) < sizeof(struct udphdr)) {

@@ -248,7 +248,7 @@ resp_parse(netdissect_options *ndo, register const u_char *bp, int length)
 
     LCHECK2(length, 1);
     ND_TCHECK_1(bp);
-    op = *bp;
+    op = EXTRACT_U_1(bp);
 
     /* bp now points to the op, so these routines must skip it */
     switch(op) {
@@ -337,7 +337,7 @@ resp_print_bulk_string(netdissect_options *ndo, register const u_char *bp, int l
             resp_print_empty(ndo);
         else {
             LCHECK2(length_cur, string_len);
-            ND_TCHECK2(*bp, string_len);
+            ND_TCHECK_LEN(bp, string_len);
             RESP_PRINT_SEGMENT(ndo, bp, string_len);
             bp += string_len;
             length_cur -= string_len;
@@ -479,7 +479,7 @@ resp_get_length(netdissect_options *ndo, register const u_char *bp, int len, con
         if (len == 0)
             goto trunc;
         ND_TCHECK_1(bp);
-        c = *bp;
+        c = EXTRACT_U_1(bp);
         if (!(c >= '0' && c <= '9')) {
             if (!saw_digit) {
                 bp++;

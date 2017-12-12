@@ -305,7 +305,7 @@ dccp_print(netdissect_options *ndo, const u_char *bp, const u_char *data2,
 			  len - fixed_hdrlen));
 		return;
 	}
-	ND_TCHECK2(*dh, fixed_hdrlen);
+	ND_TCHECK_LEN(dh, fixed_hdrlen);
 
 	sport = EXTRACT_BE_U_2(&dh->dccph_sport);
 	dport = EXTRACT_BE_U_2(&dh->dccph_dport);
@@ -338,7 +338,7 @@ dccp_print(netdissect_options *ndo, const u_char *bp, const u_char *data2,
 	}
 
 	/* checksum calculation */
-	if (ndo->ndo_vflag && ND_TTEST2(bp[0], len)) {
+	if (ndo->ndo_vflag && ND_TTEST_LEN(bp, len)) {
 		uint16_t sum = 0, dccp_sum;
 
 		dccp_sum = EXTRACT_BE_U_2(&dh->dccph_checksum);
@@ -537,11 +537,11 @@ static int dccp_print_option(netdissect_options *ndo, const u_char *option, u_in
 
 	ND_TCHECK_1(option);
 
-	if (*option >= 32) {
+	if (EXTRACT_U_1(option) >= 32) {
 		ND_TCHECK_1(option + 1);
 		optlen = EXTRACT_U_1(option + 1);
 		if (optlen < 2) {
-			if (*option >= 128)
+			if (EXTRACT_U_1(option) >= 128)
 				ND_PRINT((ndo, "CCID option %u optlen too short", EXTRACT_U_1(option)));
 			else
 				ND_PRINT((ndo, "%s optlen too short",
@@ -552,7 +552,7 @@ static int dccp_print_option(netdissect_options *ndo, const u_char *option, u_in
 		optlen = 1;
 
 	if (hlen < optlen) {
-		if (*option >= 128)
+		if (EXTRACT_U_1(option) >= 128)
 			ND_PRINT((ndo, "CCID option %u optlen goes past header length",
 				  EXTRACT_U_1(option)));
 		else
@@ -560,9 +560,9 @@ static int dccp_print_option(netdissect_options *ndo, const u_char *option, u_in
 				  tok2str(dccp_option_values, "Option %u", EXTRACT_U_1(option))));
 		return 0;
 	}
-	ND_TCHECK2(*option, optlen);
+	ND_TCHECK_LEN(option, optlen);
 
-	if (*option >= 128) {
+	if (EXTRACT_U_1(option) >= 128) {
 		ND_PRINT((ndo, "CCID option %d", EXTRACT_U_1(option)));
 		switch (optlen) {
 			case 4:
@@ -585,7 +585,7 @@ static int dccp_print_option(netdissect_options *ndo, const u_char *option, u_in
 				ND_PRINT((ndo, " optlen too short"));
 				return optlen;
 			}
-			if (*(option + 2) < 10){
+			if (EXTRACT_U_1(option + 2) < 10){
 				ND_PRINT((ndo, " %s", dccp_feature_nums[EXTRACT_U_1(option + 2)]));
 				for (i = 0; i < optlen - 3; i++)
 					ND_PRINT((ndo, " %d", EXTRACT_U_1(option + 3 + i)));

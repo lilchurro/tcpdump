@@ -27,7 +27,6 @@
 
 #include "netdissect.h"
 #include "extract.h"
-#include "ether.h"
 #include "addrtoname.h"
 #include "oui.h"
 #include "af.h"
@@ -116,8 +115,8 @@ struct cfm_lbm_t {
 struct cfm_ltm_t {
     uint8_t transaction_id[4];
     uint8_t ttl;
-    uint8_t original_mac[ETHER_ADDR_LEN];
-    uint8_t target_mac[ETHER_ADDR_LEN];
+    nd_mac_addr original_mac;
+    nd_mac_addr target_mac;
 };
 
 static const struct tok cfm_ltm_flag_values[] = {
@@ -370,11 +369,11 @@ cfm_print(netdissect_options *ndo,
         /*
          * Resolve the MD fields.
          */
-        md_nameformat = *namesp;
+        md_nameformat = EXTRACT_U_1(namesp);
         namesp++;
         names_data_remaining--;  /* We know this is != 0 */
         if (md_nameformat != CFM_CCM_MD_FORMAT_NONE) {
-            md_namelength = *namesp;
+            md_namelength = EXTRACT_U_1(namesp);
             namesp++;
             names_data_remaining--; /* We know this is !=0 */
             ND_PRINT((ndo, "\n\t  MD Name Format %s (%u), MD Name length %u",
@@ -428,10 +427,10 @@ cfm_print(netdissect_options *ndo,
         /*
          * Resolve the MA fields.
          */
-        ma_nameformat = *namesp;
+        ma_nameformat = EXTRACT_U_1(namesp);
         namesp++;
         names_data_remaining--; /* We know this is != 0 */
-        ma_namelength = *namesp;
+        ma_namelength = EXTRACT_U_1(namesp);
         namesp++;
         names_data_remaining--; /* We know this is != 0 */
         ND_PRINT((ndo, "\n\t  MA Name-Format %s (%u), MA name length %u",
@@ -544,7 +543,7 @@ cfm_print(netdissect_options *ndo,
         /* do we have the full tlv header ? */
         if (tlen < sizeof(struct cfm_tlv_header_t))
             goto tooshort;
-        ND_TCHECK2(*tptr, sizeof(struct cfm_tlv_header_t));
+        ND_TCHECK_LEN(tptr, sizeof(struct cfm_tlv_header_t));
         cfm_tlv_len=EXTRACT_BE_U_2(&cfm_tlv_header->length);
 
         ND_PRINT((ndo, ", length %u", cfm_tlv_len));
@@ -556,7 +555,7 @@ cfm_print(netdissect_options *ndo,
         /* do we have the full tlv ? */
         if (tlen < cfm_tlv_len)
             goto tooshort;
-        ND_TCHECK2(*tptr, cfm_tlv_len);
+        ND_TCHECK_LEN(tptr, cfm_tlv_len);
         hexdump = FALSE;
 
         switch(cfm_tlv_type) {
@@ -638,7 +637,7 @@ cfm_print(netdissect_options *ndo,
                 /* IEEE 802.1Q-2014 Section 21.5.3.3: Chassis ID */
                 switch (chassis_id_type) {
                 case CFM_CHASSIS_ID_MAC_ADDRESS:
-                    if (chassis_id_length != ETHER_ADDR_LEN) {
+                    if (chassis_id_length != MAC_ADDR_LEN) {
                         ND_PRINT((ndo, " (invalid MAC address length)"));
                         hexdump = TRUE;
                         break;

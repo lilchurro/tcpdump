@@ -111,8 +111,8 @@ vrrp_print(netdissect_options *ndo,
 	const char *type_s;
 
 	ND_TCHECK_1(bp);
-	version = (bp[0] & 0xf0) >> 4;
-	type = bp[0] & 0x0f;
+	version = (EXTRACT_U_1(bp) & 0xf0) >> 4;
+	type = EXTRACT_U_1(bp) & 0x0f;
 	type_s = tok2str(type2str, "unknown type (%u)", type);
 	ND_PRINT((ndo, "VRRPv%u, %s", version, type_s));
 	if (ttl != 255)
@@ -124,20 +124,20 @@ vrrp_print(netdissect_options *ndo,
 	ND_TCHECK_1(bp + 5);
 
 	if (version == 2) {
-		auth_type = bp[4];
+		auth_type = EXTRACT_U_1(bp + 4);
 		ND_PRINT((ndo, ", authtype %s", tok2str(auth2str, NULL, auth_type)));
 		ND_PRINT((ndo, ", intvl %us, length %u", EXTRACT_U_1(bp + 5), len));
 	} else { /* version == 3 */
-		uint16_t intvl = (bp[4] & 0x0f) << 8 | bp[5];
+		uint16_t intvl = (EXTRACT_U_1(bp + 4) & 0x0f) << 8 | EXTRACT_U_1(bp + 5);
 		ND_PRINT((ndo, ", intvl %ucs, length %u", intvl, len));
 	}
 
 	if (ndo->ndo_vflag) {
-		int naddrs = bp[3];
+		int naddrs = EXTRACT_U_1(bp + 3);
 		int i;
 		char c;
 
-		if (version == 2 && ND_TTEST2(bp[0], len)) {
+		if (version == 2 && ND_TTEST_LEN(bp, len)) {
 			struct cksum_vec vec[1];
 
 			vec[0].ptr = bp;
@@ -147,7 +147,7 @@ vrrp_print(netdissect_options *ndo,
 					EXTRACT_BE_U_2(bp + 6)));
 		}
 
-		if (version == 3 && ND_TTEST2(bp[0], len)) {
+		if (version == 3 && ND_TTEST_LEN(bp, len)) {
 			uint16_t cksum = nextproto4_cksum(ndo, (const struct ip *)bp2, bp,
 				len, len, IPPROTO_VRRP);
 			if (cksum)

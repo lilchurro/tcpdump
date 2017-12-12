@@ -166,7 +166,7 @@ llc_print(netdissect_options *ndo, const u_char *p, u_int length, u_int caplen,
 		return (length);
 	}
 
-	dsap_field = *p;
+	dsap_field = EXTRACT_U_1(p);
 	ssap_field = EXTRACT_U_1(p + 1);
 
 	/*
@@ -210,11 +210,11 @@ llc_print(netdissect_options *ndo, const u_char *p, u_int length, u_int caplen,
 		/*
 		 * This is an Ethernet_802.3 IPX frame; it has an
 		 * 802.3 header (i.e., an Ethernet header where the
-		 * type/length field is <= ETHERMTU, i.e. it's a length
-		 * field, not a type field), but has no 802.2 header -
-		 * the IPX packet starts right after the Ethernet header,
-		 * with a signature of two bytes of 0xFF (which is
-		 * LLCSAP_GLOBAL).
+		 * type/length field is <= MAX_ETHERNET_LENGTH_VAL,
+		 * i.e. it's a length field, not a type field), but
+		 * has no 802.2 header - the IPX packet starts right
+		 * after the Ethernet header, with a signature of two
+		 * bytes of 0xFF (which is LLCSAP_GLOBAL).
 		 *
 		 * (It might also have been an Ethernet_802.3 IPX at
 		 * one time, but got bridged onto another network,
@@ -515,7 +515,7 @@ snap_print(netdissect_options *ndo, const u_char *p, u_int length, u_int caplen,
 			/*
 			 * Skip the padding.
 			 */
-			ND_TCHECK2(*p, bridge_pad);
+			ND_TCHECK_LEN(p, bridge_pad);
 			caplen -= bridge_pad;
 			length -= bridge_pad;
 			p += bridge_pad;
@@ -536,7 +536,7 @@ snap_print(netdissect_options *ndo, const u_char *p, u_int length, u_int caplen,
 			 * Skip the padding, but not the Access
 			 * Control field.
 			 */
-			ND_TCHECK2(*p, bridge_pad);
+			ND_TCHECK_LEN(p, bridge_pad);
 			caplen -= bridge_pad;
 			length -= bridge_pad;
 			p += bridge_pad;
@@ -557,7 +557,7 @@ snap_print(netdissect_options *ndo, const u_char *p, u_int length, u_int caplen,
 			/*
 			 * Skip the padding.
 			 */
-			ND_TCHECK2(*p, bridge_pad + 1);
+			ND_TCHECK_LEN(p, bridge_pad + 1);
 			caplen -= bridge_pad + 1;
 			length -= bridge_pad + 1;
 			p += bridge_pad + 1;

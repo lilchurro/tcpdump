@@ -1137,7 +1137,7 @@ juniper_read_tlv_value(const u_char *p, u_int tlv_type, u_int tlv_len)
    if (tlv_type < 128) {
        switch (tlv_len) {
        case 1:
-           tlv_value = *p;
+           tlv_value = EXTRACT_U_1(p);
            break;
        case 2:
            tlv_value = EXTRACT_LE_U_2(p);
@@ -1156,7 +1156,7 @@ juniper_read_tlv_value(const u_char *p, u_int tlv_type, u_int tlv_len)
        /* TLVs >= 128 are big endian encoded */
        switch (tlv_len) {
        case 1:
-           tlv_value = *p;
+           tlv_value = EXTRACT_U_1(p);
            break;
        case 2:
            tlv_value = EXTRACT_BE_U_2(p);
@@ -1195,8 +1195,8 @@ juniper_parse_header(netdissect_options *ndo,
     l2info->length = h->len;
     l2info->caplen = h->caplen;
     ND_TCHECK_4(p);
-    l2info->flags = p[3];
-    l2info->direction = p[3]&JUNIPER_BPF_PKT_IN;
+    l2info->flags = EXTRACT_U_1(p + 3);
+    l2info->direction = EXTRACT_U_1(p + 3) & JUNIPER_BPF_PKT_IN;
 
     if (EXTRACT_BE_U_3(p) != JUNIPER_MGC_NUMBER) { /* magic number found ? */
         ND_PRINT((ndo, "no magic-number found!"));
@@ -1232,7 +1232,7 @@ juniper_parse_header(netdissect_options *ndo,
         if (ndo->ndo_vflag > 1)
             ND_PRINT((ndo, ", PCAP Extension(s) total length %u", jnx_ext_len));
 
-        ND_TCHECK2(tptr[0], jnx_ext_len);
+        ND_TCHECK_LEN(tptr, jnx_ext_len);
         while (jnx_ext_len > JUNIPER_EXT_TLV_OVERHEAD) {
             tlv_type = EXTRACT_U_1(tptr);
             tptr++;
@@ -1357,11 +1357,11 @@ juniper_parse_header(netdissect_options *ndo,
                        l2info->cookie_len));
 
             if (l2info->cookie_len > 0) {
-                ND_TCHECK2(p[0], l2info->cookie_len);
+                ND_TCHECK_LEN(p, l2info->cookie_len);
                 if (ndo->ndo_eflag)
                     ND_PRINT((ndo, ", cookie 0x"));
                 for (idx = 0; idx < l2info->cookie_len; idx++) {
-                    l2info->cookie[idx] = p[idx]; /* copy cookie data */
+                    l2info->cookie[idx] = EXTRACT_U_1(p + idx); /* copy cookie data */
                     if (ndo->ndo_eflag) ND_PRINT((ndo, "%02x", EXTRACT_U_1(p + idx)));
                 }
             }

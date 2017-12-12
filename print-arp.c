@@ -31,7 +31,6 @@
 
 #include "netdissect.h"
 #include "addrtoname.h"
-#include "ether.h"
 #include "ethertype.h"
 #include "extract.h"
 
@@ -266,7 +265,7 @@ atmarp_print(netdissect_options *ndo,
 	pro = ATMPRO(ap);
 	op = ATMOP(ap);
 
-	if (!ND_TTEST2(*aar_tpa(ap), ATMTPROTO_LEN(ap))) {
+	if (!ND_TTEST_LEN(aar_tpa(ap), ATMTPROTO_LEN(ap))) {
 		ND_PRINT((ndo, "%s", tstr));
 		ND_DEFAULTPRINT((const u_char *)ap, length);
 		return;
@@ -385,7 +384,7 @@ arp_print(netdissect_options *ndo,
             break;
 	}
 
-	if (!ND_TTEST2(*TPA(ap), PROTO_LEN(ap))) {
+	if (!ND_TTEST_LEN(TPA(ap), PROTO_LEN(ap))) {
 		ND_PRINT((ndo, "%s", tstr));
 		ND_DEFAULTPRINT((const u_char *)ap, length);
 		return;
