@@ -1,6 +1,6 @@
 # tcpdump
 
-[![Build Status](https://travis-ci.org/lilchurro/tcpdump.svg?branch=send-upstream)](https://travis-ci.org/lilchurro/tcpdump)
+[![Build Status](https://travis-ci.org/lilchurro/tcpdump.svg?branch=issues/2)](https://travis-ci.org/lilchurro/tcpdump)
 
 To report a security issue please send an e-mail to security@tcpdump.org.
 
