@@ -261,7 +261,6 @@ HDR = \
 	clean_cap_dump.h \
 	chdlc.h \
 	cpack.h \
-	ether.h \
 	ethertype.h \
 	extract.h \
 	funcattrs.h \
