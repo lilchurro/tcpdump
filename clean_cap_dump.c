@@ -24,7 +24,6 @@
 #include <inttypes.h>
 #include "netdissect.h"
 #include <pcap/pcap.h>
-#include <ether.h>
 #include "clean_cap_dump.h"
 #include "extract.h"
 #include "ethertype.h"
@@ -33,8 +32,17 @@
 #include "udp.h"
 
 // includes max packet size of IP packet, plus eth header
-#define MAXPACKET   65549
+#define MAXPACKET	65549
+#define ETHER_HDRLEN	14
 
+/*
+ * Structure of an Ethernet header.
+ */
+struct  ether_header {
+        nd_mac_addr     ether_dhost;
+        nd_mac_addr     ether_shost;
+        nd_uint16_t     ether_length_type;
+};
 
 /* Assumes ether type; returns pointer to IP header or NULL if not found. */
 u_char *
