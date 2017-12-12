@@ -1718,20 +1718,22 @@ main(int argc, char **argv)
 			ndo->ndo_packet_number = 1;
 			break;
 
-		case OPTION_ZERO_TCPUDP_PAYLOAD:	/* CyberReboot: new flag */
+		/* start: CyberReboot additional options */
+		case OPTION_ZERO_TCPUDP_PAYLOAD:
 			no_payload = 1;
 			break;
 
-		case OPTION_NO_TCPUDP_PAYLOAD:		/* CyberReboot: new flag */
+		case OPTION_NO_TCPUDP_PAYLOAD:
 			no_payload = 2;
 			break;
 
-		case OPTION_MASK_EXTERNAL:		/* CyberReboot: new flag */
+		case OPTION_MASK_EXTERNAL:
 			if (verify_IP(optarg) < 0)
 				error("IP address mask is not a legal IP address");
 			++mask_external_ip;
 			dumpinfo.maskIP = optarg;
 			break;
+		/* end: CyberReboot additional options */
 
 		case OPTION_VERSION:
 			print_version();

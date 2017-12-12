@@ -6,6 +6,6 @@
 # The options -n and -t are useless in TESTLIST. They are already set
 # in TESTonce.
 
-sanitize0     sanitize.pcap   sanitize0.out    sanitize0.pcap   -0
-sanitize00    sanitize.pcap   sanitize00.out   sanitize00.pcap  -00
-sani-combo    sanitize.pcap   sani-combo.out   sani-combo.pcap  -00 -* 1.1.1.1
+zeropayload   sanitize.pcap   sanitize0.out    sanitize0.pcap   --zero-tcpudp-payload
+nopayload     sanitize.pcap   sanitize00.out   sanitize00.pcap  --no-tcpudp-payload
+cleanNmask    sanitize.pcap   sani-combo.out   sani-combo.pcap  --no-tcpudp-payload --mask-external-address 1.1.1.1

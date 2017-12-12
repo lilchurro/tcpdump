@@ -210,10 +210,13 @@ pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 		if (no_payload_flag > 0 && validate_iph_len(ip, p_len) > -1) {
 			struct ip *p = (struct ip *)ip;
 			int ph_len = IP_HL(p) * 4;
-			if (p-> ip_p != IPPROTO_TCP && p-> ip_p != IPPROTO_UDP) {
+			if (*p->ip_p != IPPROTO_TCP && *p->ip_p != IPPROTO_UDP) {
 				break;
 			}
-			if (p->ip_p == IPPROTO_TCP) {
+
+			p_end = ip + h->caplen; // here to stifle warning about being uninitialized
+
+			if (*p->ip_p == IPPROTO_TCP) {
 				struct tcphdr *t = (struct tcphdr *)(ip+ph_len);
 				p_len = TH_OFF(t) * 4;
 				if (p_len < sizeof(*t)) {
@@ -221,7 +224,7 @@ pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 				}
 				p_end = ip + ph_len + p_len;
 
-			} else if (p->ip_p == IPPROTO_UDP) {
+			} else if (*p->ip_p == IPPROTO_UDP) {
 				struct udphdr *u = (struct udphdr *)(ip+ph_len);
 				if (p_len < sizeof(struct udphdr) ||
 				    EXTRACT_BE_U_2(&u->uh_ulen) < sizeof(struct udphdr)) {

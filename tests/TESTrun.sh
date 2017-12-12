@@ -40,6 +40,7 @@ runSimpleTests()
   passed=`cat .passed`
   failed=`cat .failed`
 }
+
 runOutfileTests() {
     passed=`cat .passed`
     failed=`cat .failed`
