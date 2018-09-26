@@ -208,12 +208,9 @@ pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 
 	switch (dlt) {
 	case DLT_EN10MB:
-		if ((ip = get_iph_ptr(h, modp)) == NULL) {
+		if ((ip = get_iph_ptr(h, modp)) == NULL || (p_len -= ETHER_HDRLEN) < 0) {
 			break;
 		}
-		if ((p_len -= ETHER_HDRLEN) < 0) {
-      break;
-    };
 
 		if (mask_ip_flag && maskIP != NULL) { // TODO: Restructure
 			mask_ip(ip, p_len, maskIP);
