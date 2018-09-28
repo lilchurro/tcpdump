@@ -27,29 +27,28 @@
 /* RFC 4666 */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 
 #include "netdissect.h"
 #include "extract.h"
 
-static const char tstr[] = " [|m3ua]";
 
 #define M3UA_REL_1_0 1
 
 struct m3ua_common_header {
-  uint8_t  v;
-  uint8_t  reserved;
-  uint8_t  msg_class;
-  uint8_t  msg_type;
-  uint32_t len;
+  nd_uint8_t  v;
+  nd_uint8_t  reserved;
+  nd_uint8_t  msg_class;
+  nd_uint8_t  msg_type;
+  nd_uint32_t len;
 };
 
 struct m3ua_param_header {
-  uint16_t tag;
-  uint16_t len;
+  nd_uint16_t tag;
+  nd_uint16_t len;
 };
 
 /* message classes */
@@ -220,21 +219,21 @@ tag_value_print(netdissect_options *ndo,
     if (size < 4)
       goto invalid;
     ND_TCHECK_LEN(buf, size);
-    ND_PRINT((ndo, "0x%08x", EXTRACT_BE_U_4(buf)));
+    ND_PRINT("0x%08x", EXTRACT_BE_U_4(buf));
     break;
   /* ... */
   default:
-    ND_PRINT((ndo, "(length %u)", size + (u_int)sizeof(struct m3ua_param_header)));
+    ND_PRINT("(length %u)", size + (u_int)sizeof(struct m3ua_param_header));
     ND_TCHECK_LEN(buf, size);
   }
   return;
 
 invalid:
-  ND_PRINT((ndo, "%s", istr));
+  nd_print_invalid(ndo);
   ND_TCHECK_LEN(buf, size);
   return;
 trunc:
-  ND_PRINT((ndo, "%s", tstr));
+  nd_print_trunc(ndo);
 }
 
 /*
@@ -263,7 +262,7 @@ m3ua_tags_print(netdissect_options *ndo,
     ND_TCHECK_LEN(p, sizeof(struct m3ua_param_header));
     /* Parameter Tag */
     hdr_tag = EXTRACT_BE_U_2(p);
-    ND_PRINT((ndo, "\n\t\t\t%s: ", tok2str(ParamName, "Unknown Parameter (0x%04x)", hdr_tag)));
+    ND_PRINT("\n\t\t\t%s: ", tok2str(ParamName, "Unknown Parameter (0x%04x)", hdr_tag));
     /* Parameter Length */
     hdr_len = EXTRACT_BE_U_2(p + 2);
     if (hdr_len < sizeof(struct m3ua_param_header))
@@ -278,11 +277,11 @@ m3ua_tags_print(netdissect_options *ndo,
   return;
 
 invalid:
-  ND_PRINT((ndo, "%s", istr));
+  nd_print_invalid(ndo);
   ND_TCHECK_LEN(buf, size);
   return;
 trunc:
-  ND_PRINT((ndo, "%s", tstr));
+  nd_print_trunc(ndo);
 }
 
 /*
@@ -302,39 +301,42 @@ m3ua_print(netdissect_options *ndo,
 {
   const struct m3ua_common_header *hdr = (const struct m3ua_common_header *) buf;
   const struct tok *dict;
+  uint8_t msg_class;
 
+  ndo->ndo_protocol = "m3ua";
   /* size includes the header */
   if (size < sizeof(struct m3ua_common_header))
     goto invalid;
-  ND_TCHECK(*hdr);
-  if (hdr->v != M3UA_REL_1_0)
+  ND_TCHECK_SIZE(hdr);
+  if (EXTRACT_U_1(hdr->v) != M3UA_REL_1_0)
     return;
 
+  msg_class = EXTRACT_U_1(hdr->msg_class);
   dict =
-    hdr->msg_class == M3UA_MSGC_MGMT     ? MgmtMessages :
-    hdr->msg_class == M3UA_MSGC_TRANSFER ? TransferMessages :
-    hdr->msg_class == M3UA_MSGC_SSNM     ? SS7Messages :
-    hdr->msg_class == M3UA_MSGC_ASPSM    ? ASPStateMessages :
-    hdr->msg_class == M3UA_MSGC_ASPTM    ? ASPTrafficMessages :
-    hdr->msg_class == M3UA_MSGC_RKM      ? RoutingKeyMgmtMessages :
+    msg_class == M3UA_MSGC_MGMT     ? MgmtMessages :
+    msg_class == M3UA_MSGC_TRANSFER ? TransferMessages :
+    msg_class == M3UA_MSGC_SSNM     ? SS7Messages :
+    msg_class == M3UA_MSGC_ASPSM    ? ASPStateMessages :
+    msg_class == M3UA_MSGC_ASPTM    ? ASPTrafficMessages :
+    msg_class == M3UA_MSGC_RKM      ? RoutingKeyMgmtMessages :
     NULL;
 
-  ND_PRINT((ndo, "\n\t\t%s", tok2str(MessageClasses, "Unknown message class %i", hdr->msg_class)));
+  ND_PRINT("\n\t\t%s", tok2str(MessageClasses, "Unknown message class %i", msg_class));
   if (dict != NULL)
-    ND_PRINT((ndo, " %s Message", tok2str(dict, "Unknown (0x%02x)", hdr->msg_type)));
+    ND_PRINT(" %s Message", tok2str(dict, "Unknown (0x%02x)", EXTRACT_U_1(hdr->msg_type)));
 
-  if (size != EXTRACT_BE_U_4(&hdr->len))
-    ND_PRINT((ndo, "\n\t\t\t@@@@@@ Corrupted length %u of message @@@@@@", EXTRACT_BE_U_4(&hdr->len)));
+  if (size != EXTRACT_BE_U_4(hdr->len))
+    ND_PRINT("\n\t\t\t@@@@@@ Corrupted length %u of message @@@@@@", EXTRACT_BE_U_4(hdr->len));
   else
     m3ua_tags_print(ndo, buf + sizeof(struct m3ua_common_header),
-                    EXTRACT_BE_U_4(&hdr->len) - sizeof(struct m3ua_common_header));
+                    EXTRACT_BE_U_4(hdr->len) - sizeof(struct m3ua_common_header));
   return;
 
 invalid:
-  ND_PRINT((ndo, "%s", istr));
+  nd_print_invalid(ndo);
   ND_TCHECK_LEN(buf, size);
   return;
 trunc:
-  ND_PRINT((ndo, "%s", tstr));
+  nd_print_trunc(ndo);
 }
 

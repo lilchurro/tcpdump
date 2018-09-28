@@ -33,17 +33,16 @@
 /* \summary: version-independent OpenFlow printer */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 
 #include "netdissect.h"
 #include "extract.h"
 #include "openflow.h"
 #include "oui.h"
 
-static const char tstr[] = " [|openflow]";
 
 #define OF_VER_1_0    0x01
 
@@ -70,8 +69,8 @@ static void
 of_header_print(netdissect_options *ndo, const uint8_t version, const uint8_t type,
                       const uint16_t length, const uint32_t xid)
 {
-	ND_PRINT((ndo, "\n\tversion unknown (0x%02x), type 0x%02x, length %u, xid 0x%08x",
-	       version, type, length, xid));
+	ND_PRINT("\n\tversion unknown (0x%02x), type 0x%02x, length %u, xid 0x%08x",
+	       version, type, length, xid);
 }
 
 /* Print a single OpenFlow message. */
@@ -121,22 +120,21 @@ of_header_body_print(netdissect_options *ndo, const u_char *cp, const u_char *ep
 	}
 
 invalid: /* fail current packet */
-	ND_PRINT((ndo, "%s", istr));
+	nd_print_invalid(ndo);
 	ND_TCHECK_LEN(cp, ep - cp);
 	return ep;
 trunc:
-	ND_PRINT((ndo, "%s", tstr));
+	nd_print_trunc(ndo);
 	return ep;
 }
 
 /* Print a TCP segment worth of OpenFlow messages presuming the segment begins
  * on a message boundary. */
 void
-openflow_print(netdissect_options *ndo, const u_char *cp, const u_int len)
+openflow_print(netdissect_options *ndo, const u_char *cp, const u_int len _U_)
 {
-	const u_char *ep = cp + len;
-
-	ND_PRINT((ndo, ": OpenFlow"));
-	while (cp < ep)
-		cp = of_header_body_print(ndo, cp, ep);
+	ndo->ndo_protocol = "openflow";
+	ND_PRINT(": OpenFlow");
+	while (cp < ndo->ndo_snapend)
+		cp = of_header_body_print(ndo, cp, ndo->ndo_snapend);
 }

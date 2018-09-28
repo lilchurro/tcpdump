@@ -76,23 +76,19 @@ nd_ipv4_to_network_uint(nd_ipv4 a) {
 	uint32_t ip_uint = 0;
 
 	snprintf(ip, INET_ADDRSTRLEN, "%d.%d.%d.%d",
-		 a.bytes[0], a.bytes[1], a.bytes[2], a.bytes[3]);
+		 a[0], a[1], a[2], a[3]);
 	inet_pton(AF_INET, ip, &ip_uint);
 
 	return ip_uint;
 }
 
 /* Converts network uint to address string */
-static nd_ipv4
-network_uint_to_nd_ipv4(uint32_t a) {
-	nd_ipv4 addr;
-
-	addr.bytes[3] = (a>>24) & 0xff;
-	addr.bytes[2] = (a>>16) & 0xff;
-	addr.bytes[1] = (a>>8) & 0xff;
-	addr.bytes[0] = a & 0xff;
-
-	return addr;
+static void
+network_uint_to_nd_ipv4(uint32_t a, nd_ipv4 addr) {
+	addr[3] = (a>>24) & 0xff;
+	addr[2] = (a>>16) & 0xff;
+	addr[1] = (a>>8) & 0xff;
+	addr[0] = a & 0xff;
 }
 
 /* Returns 1 if IP address presented in nd_ipv4 falls within reserved IP range;
@@ -124,7 +120,7 @@ is_reserved(nd_ipv4 a) {
 	uint32_t addr = nd_ipv4_to_network_uint(a);
 
 	for (i = 0; i < sb_sz; i++) {
-		if ((addr & specialblock[i].netmask) == 
+		if ((addr & specialblock[i].netmask) ==
 		    (specialblock[i].netip & specialblock[i].netmask)) {
 			reserved = 1;
 			break;
@@ -163,23 +159,27 @@ int
 mask_ip(u_char *iph, unsigned int len, const char * maskIP) {
 	struct ip *ip = (struct ip *)iph;
 	uint32_t m = 0;
+	nd_ipv4 mask;
 	inet_pton(AF_INET, maskIP, &m);
 
 	if (validate_iph_len(iph, len) < 0)
 		return -1;
 
 	if (is_reserved(ip->ip_src) == 0) {
-		nd_ipv4 mask = network_uint_to_nd_ipv4(m);
+		network_uint_to_nd_ipv4(m, mask);
 		memcpy(&(ip->ip_src), &mask, sizeof(mask));
 	}
 	if (is_reserved(ip->ip_dst) == 0) {
-		nd_ipv4 mask = network_uint_to_nd_ipv4(m);
+		network_uint_to_nd_ipv4(m, mask);
 		memcpy(&(ip->ip_dst), &mask, sizeof(mask));
 	}
 
 	return 0;
 }
 
+/* Format should track pretty closely with the pcap_dump function
+ * from the libpcap/sf-pcap.c file.
+ */
 void
 pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 	      int dlt, int no_payload_flag, int mask_ip_flag, const char *maskIP) {
@@ -200,18 +200,18 @@ pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 	memcpy(modp, sp, h->caplen);
 
 	f = (FILE *)user;
-	sf_hdr.ts.tv_sec    = h->ts.tv_sec;
-	sf_hdr.ts.tv_usec   = h->ts.tv_usec;
+	sf_hdr.ts.tv_sec    = (bpf_int32)h->ts.tv_sec;
+	sf_hdr.ts.tv_usec   = (bpf_int32)h->ts.tv_usec;
 	sf_hdr.caplen       = h->caplen;
 	sf_hdr.len          = h->len;
 
-	switch(dlt) {
+	switch (dlt) {
 	case DLT_EN10MB:
-		if ((ip = get_iph_ptr(h, modp)) == NULL)
+		if ((ip = get_iph_ptr(h, modp)) == NULL || (p_len -= ETHER_HDRLEN) < 0) {
 			break;
-		p_len -= ETHER_HDRLEN;
+		}
 
-		if (mask_ip_flag && maskIP != NULL) {
+		if (mask_ip_flag && maskIP != NULL) { // TODO: Restructure
 			mask_ip(ip, p_len, maskIP);
 		}
 
@@ -251,9 +251,11 @@ pcap_mod_and_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp,
 		}
 		break;
 
-	/* default:
-	 *	printf("DEBUG: not Ethernet LL.\n");
-	 */
+	default:
+		/*
+		 *	printf("DEBUG: not Ethernet LL.\n");
+		 */
+		break;
 	}
 
 	(void)fwrite(&sf_hdr, sizeof(sf_hdr), 1, f);

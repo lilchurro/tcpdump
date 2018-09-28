@@ -37,20 +37,21 @@
 /* \summary: Common Address Redundancy Protocol (CARP) printer */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 
 #include "netdissect.h" /* for checksum structure and functions */
 #include "extract.h"
 
 void
-carp_print(netdissect_options *ndo, register const u_char *bp, register u_int len, int ttl)
+carp_print(netdissect_options *ndo, const u_char *bp, u_int len, u_int ttl)
 {
-	int version, type;
+	u_int version, type;
 	const char *type_s;
 
+	ndo->ndo_protocol = "carp";
 	ND_TCHECK_1(bp);
 	version = (EXTRACT_U_1(bp) & 0xf0) >> 4;
 	type = EXTRACT_U_1(bp) & 0x0f;
@@ -58,26 +59,26 @@ carp_print(netdissect_options *ndo, register const u_char *bp, register u_int le
 		type_s = "advertise";
 	else
 		type_s = "unknown";
-	ND_PRINT((ndo, "CARPv%d-%s %d: ", version, type_s, len));
+	ND_PRINT("CARPv%u-%s %u: ", version, type_s, len);
 	if (ttl != 255)
-		ND_PRINT((ndo, "[ttl=%d!] ", ttl));
+		ND_PRINT("[ttl=%u!] ", ttl);
 	if (version != 2 || type != 1)
 		return;
 	ND_TCHECK_1(bp + 2);
 	ND_TCHECK_1(bp + 5);
-	ND_PRINT((ndo, "vhid=%d advbase=%d advskew=%d authlen=%d ",
-	    EXTRACT_U_1(bp + 1), EXTRACT_U_1(bp + 5), EXTRACT_U_1(bp + 2), EXTRACT_U_1(bp + 3)));
+	ND_PRINT("vhid=%u advbase=%u advskew=%u authlen=%u ",
+	    EXTRACT_U_1(bp + 1), EXTRACT_U_1(bp + 5), EXTRACT_U_1(bp + 2), EXTRACT_U_1(bp + 3));
 	if (ndo->ndo_vflag) {
 		struct cksum_vec vec[1];
 		vec[0].ptr = (const uint8_t *)bp;
 		vec[0].len = len;
 		if (ND_TTEST_LEN(bp, len) && in_cksum(vec, 1))
-			ND_PRINT((ndo, " (bad carp cksum %x!)",
-				EXTRACT_BE_U_2(bp + 6)));
+			ND_PRINT(" (bad carp cksum %x!)",
+				EXTRACT_BE_U_2(bp + 6));
 	}
-	ND_PRINT((ndo, "counter=%" PRIu64, EXTRACT_BE_U_8(bp + 8)));
+	ND_PRINT("counter=%" PRIu64, EXTRACT_BE_U_8(bp + 8));
 
 	return;
 trunc:
-	ND_PRINT((ndo, "[|carp]"));
+	nd_print_trunc(ndo);
 }

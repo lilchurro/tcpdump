@@ -23,7 +23,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
 #ifdef HAVE_CASPER
@@ -31,29 +31,78 @@
 #include <casper/cap_dns.h>
 #endif /* HAVE_CASPER */
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 
-#ifdef USE_ETHER_NTOHOST
-#ifdef HAVE_NETINET_IF_ETHER_H
-struct mbuf;		/* Squelch compiler warnings on some platforms for */
-struct rtentry;		/* declarations in <net/if.h> */
-#include <net/if.h>	/* for "struct ifnet" in "struct arpcom" on Solaris */
-#include <netinet/if_ether.h>
-#endif /* HAVE_NETINET_IF_ETHER_H */
-#ifdef NETINET_ETHER_H_DECLARES_ETHER_NTOHOST
-#include <netinet/ether.h>
-#endif /* NETINET_ETHER_H_DECLARES_ETHER_NTOHOST */
-
-#if !defined(HAVE_DECL_ETHER_NTOHOST) || !HAVE_DECL_ETHER_NTOHOST
-#ifndef HAVE_STRUCT_ETHER_ADDR
-struct ether_addr {
-	unsigned char ether_addr_octet[6];
-};
-#endif
-extern int ether_ntohost(char *, const struct ether_addr *);
+#ifndef NTOHL
+#define NTOHL(x)	(x) = ntohl(x)
+#define NTOHS(x)	(x) = ntohs(x)
+#define HTONL(x)	(x) = htonl(x)
+#define HTONS(x)	(x) = htons(x)
 #endif
 
-#endif /* USE_ETHER_NTOHOST */
+#ifdef _WIN32
+  /*
+   * We have our own ether_ntohost(), reading from the system's
+   * Ethernet address file.
+   */
+  #include "missing/win_ether_ntohost.h"
+#else
+  #ifdef USE_ETHER_NTOHOST
+    #if defined(NET_ETHERNET_H_DECLARES_ETHER_NTOHOST)
+      /*
+       * OK, just include <net/ethernet.h>.
+       */
+      #include <net/ethernet.h>
+    #elif defined(NETINET_ETHER_H_DECLARES_ETHER_NTOHOST)
+      /*
+       * OK, just include <netinet/ether.h>
+       */
+      #include <netinet/ether.h>
+    #elif defined(SYS_ETHERNET_H_DECLARES_ETHER_NTOHOST)
+      /*
+       * OK, just include <sys/ethernet.h>
+       */
+      #include <sys/ethernet.h>
+    #elif defined(ARPA_INET_H_DECLARES_ETHER_NTOHOST)
+      /*
+       * OK, just include <arpa/inet.h>
+       */
+      #include <arpa/inet.h>
+    #elif defined(NETINET_IF_ETHER_H_DECLARES_ETHER_NTOHOST)
+      /*
+       * OK, include <netinet/if_ether.h>, after all the other stuff we
+       * need to include or define for its benefit.
+       */
+      #define NEED_NETINET_IF_ETHER_H
+    #else
+      /*
+       * We'll have to declare it ourselves.
+       * If <netinet/if_ether.h> defines struct ether_addr, include
+       * it.  Otherwise, define it ourselves.
+       */
+      #ifdef HAVE_STRUCT_ETHER_ADDR
+        #define NEED_NETINET_IF_ETHER_H
+      #else /* HAVE_STRUCT_ETHER_ADDR */
+	struct ether_addr {
+		unsigned char ether_addr_octet[6];
+	};
+      #endif /* HAVE_STRUCT_ETHER_ADDR */
+    #endif /* what declares ether_ntohost() */
+
+    #ifdef NEED_NETINET_IF_ETHER_H
+      #include <net/if.h>	/* Needed on some platforms */
+      #include <netinet/in.h>	/* Needed on some platforms */
+      #include <netinet/if_ether.h>
+    #endif /* NEED_NETINET_IF_ETHER_H */
+
+    #ifndef HAVE_DECL_ETHER_NTOHOST
+      /*
+       * No header declares it, so declare it ourselves.
+       */
+      extern int ether_ntohost(char *, const struct ether_addr *);
+    #endif /* !defined(HAVE_DECL_ETHER_NTOHOST) */
+  #endif /* USE_ETHER_NTOHOST */
+#endif /* _WIN32 */
 
 #include <pcap.h>
 #include <pcap-namedb.h>
@@ -76,7 +125,7 @@ extern int ether_ntohost(char *, const struct ether_addr *);
 /*
  * hash tables for whatever-to-name translations
  *
- * ndo_error() called on strdup(3) failure
+ * ndo_error() called on strdup(3) failure with S_ERR_ND_MEM_ALLOC status
  */
 
 #define HASHNAMESIZE 4096
@@ -123,7 +172,7 @@ win32_gethostbyaddr(const char *addr, int len, int type)
 		    hname, sizeof(hname), NULL, 0, 0)) {
 			return NULL;
 		} else {
-			strcpy(host.h_name, hname);
+			strlcpy(host.h_name, hname, NI_MAXHOST);
 			return &host;
 		}
 		break;
@@ -181,9 +230,9 @@ static struct protoidmem protoidtable[HASHNAMESIZE];
 const char *
 intoa(uint32_t addr)
 {
-	register char *cp;
-	register u_int byte;
-	register int n;
+	char *cp;
+	u_int byte;
+	int n;
 	static char buf[sizeof(".xxx.xxx.xxx.xxx")];
 
 	NTOHL(addr);
@@ -220,7 +269,7 @@ extern cap_channel_t *capdns;
  *
  * NOTE: ap is *NOT* necessarily part of the packet data (not even if
  * this is being called with the "ipaddr_string()" macro), so you
- * *CANNOT* use the ND_TCHECK{2}/ND_TTEST{2} macros on it.  Furthermore,
+ * *CANNOT* use the ND_TCHECK_* or ND_TTEST_* macros on it.  Furthermore,
  * even in cases where it *is* part of the packet data, the caller
  * would still have to check for a null return value, even if it's
  * just printing the return value with "%s" - not all versions of
@@ -234,9 +283,9 @@ extern cap_channel_t *capdns;
  * also needs to check whether they're present in the packet buffer.
  */
 const char *
-getname(netdissect_options *ndo, const u_char *ap)
+ipaddr_string(netdissect_options *ndo, const u_char *ap)
 {
-	register struct hostent *hp;
+	struct hostent *hp;
 	uint32_t addr;
 	struct hnamemem *p;
 
@@ -270,8 +319,8 @@ getname(netdissect_options *ndo, const u_char *ap)
 
 			p->name = strdup(hp->h_name);
 			if (p->name == NULL)
-				(*ndo->ndo_error)(ndo,
-						  "getname: strdup(hp->h_name)");
+				(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+					"ipaddr_string: strdup(hp->h_name)");
 			if (ndo->ndo_Nflag) {
 				/* Remove domain qualifications */
 				dotp = strchr(p->name, '.');
@@ -283,7 +332,8 @@ getname(netdissect_options *ndo, const u_char *ap)
 	}
 	p->name = strdup(intoa(addr));
 	if (p->name == NULL)
-		(*ndo->ndo_error)(ndo, "getname: strdup(intoa(addr))");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "ipaddr_string: strdup(intoa(addr))");
 	return (p->name);
 }
 
@@ -292,9 +342,9 @@ getname(netdissect_options *ndo, const u_char *ap)
  * is assumed to be in network byte order.
  */
 const char *
-getname6(netdissect_options *ndo, const u_char *ap)
+ip6addr_string(netdissect_options *ndo, const u_char *ap)
 {
-	register struct hostent *hp;
+	struct hostent *hp;
 	union {
 		struct in6_addr addr;
 		struct for_hash_addr {
@@ -303,7 +353,7 @@ getname6(netdissect_options *ndo, const u_char *ap)
 		} addra;
 	} addr;
 	struct h6namemem *p;
-	register const char *cp;
+	const char *cp;
 	char ntop_buf[INET6_ADDRSTRLEN];
 
 	memcpy(&addr, ap, sizeof(addr));
@@ -332,8 +382,8 @@ getname6(netdissect_options *ndo, const u_char *ap)
 
 			p->name = strdup(hp->h_name);
 			if (p->name == NULL)
-				(*ndo->ndo_error)(ndo,
-						  "getname6: strdup(hp->h_name)");
+				(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+					"ip6addr_string: strdup(hp->h_name)");
 			if (ndo->ndo_Nflag) {
 				/* Remove domain qualifications */
 				dotp = strchr(p->name, '.');
@@ -346,7 +396,8 @@ getname6(netdissect_options *ndo, const u_char *ap)
 	cp = addrtostr6(ap, ntop_buf, sizeof(ntop_buf));
 	p->name = strdup(cp);
 	if (p->name == NULL)
-		(*ndo->ndo_error)(ndo, "getname6: strdup(cp)");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "ip6addr_string: strdup(cp)");
 	return (p->name);
 }
 
@@ -357,10 +408,10 @@ static const char hex[16] = {
 
 /* Find the hash node that corresponds the ether address 'ep' */
 
-static inline struct enamemem *
+static struct enamemem *
 lookup_emem(netdissect_options *ndo, const u_char *ep)
 {
-	register u_int i, j, k;
+	u_int i, j, k;
 	struct enamemem *tp;
 
 	k = (ep[0] << 8) | ep[1];
@@ -380,7 +431,7 @@ lookup_emem(netdissect_options *ndo, const u_char *ep)
 	tp->e_addr2 = k;
 	tp->e_nxt = (struct enamemem *)calloc(1, sizeof(*tp));
 	if (tp->e_nxt == NULL)
-		(*ndo->ndo_error)(ndo, "lookup_emem: calloc");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC, "lookup_emem: calloc");
 
 	return tp;
 }
@@ -390,12 +441,12 @@ lookup_emem(netdissect_options *ndo, const u_char *ep)
  * with length 'nlen'
  */
 
-static inline struct bsnamemem *
-lookup_bytestring(netdissect_options *ndo, register const u_char *bs,
+static struct bsnamemem *
+lookup_bytestring(netdissect_options *ndo, const u_char *bs,
 		  const unsigned int nlen)
 {
 	struct bsnamemem *tp;
-	register u_int i, j, k;
+	u_int i, j, k;
 
 	if (nlen >= 6) {
 		k = (bs[0] << 8) | bs[1];
@@ -425,24 +476,26 @@ lookup_bytestring(netdissect_options *ndo, register const u_char *bs,
 
 	tp->bs_bytes = (u_char *) calloc(1, nlen);
 	if (tp->bs_bytes == NULL)
-		(*ndo->ndo_error)(ndo, "lookup_bytestring: calloc");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "lookup_bytestring: calloc");
 
 	memcpy(tp->bs_bytes, bs, nlen);
 	tp->bs_nbytes = nlen;
 	tp->bs_nxt = (struct bsnamemem *)calloc(1, sizeof(*tp));
 	if (tp->bs_nxt == NULL)
-		(*ndo->ndo_error)(ndo, "lookup_bytestring: calloc");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "lookup_bytestring: calloc");
 
 	return tp;
 }
 
 /* Find the hash node that corresponds the NSAP 'nsap' */
 
-static inline struct enamemem *
-lookup_nsap(netdissect_options *ndo, register const u_char *nsap,
-	    register u_int nsap_length)
+static struct enamemem *
+lookup_nsap(netdissect_options *ndo, const u_char *nsap,
+	    u_int nsap_length)
 {
-	register u_int i, j, k;
+	u_int i, j, k;
 	struct enamemem *tp;
 	const u_char *ensap;
 
@@ -471,22 +524,22 @@ lookup_nsap(netdissect_options *ndo, register const u_char *nsap,
 	tp->e_addr2 = k;
 	tp->e_nsap = (u_char *)malloc(nsap_length + 1);
 	if (tp->e_nsap == NULL)
-		(*ndo->ndo_error)(ndo, "lookup_nsap: malloc");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC, "lookup_nsap: malloc");
 	tp->e_nsap[0] = (u_char)nsap_length;	/* guaranteed < ISONSAP_MAX_LENGTH */
 	memcpy((char *)&tp->e_nsap[1], (const char *)nsap, nsap_length);
 	tp->e_nxt = (struct enamemem *)calloc(1, sizeof(*tp));
 	if (tp->e_nxt == NULL)
-		(*ndo->ndo_error)(ndo, "lookup_nsap: calloc");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC, "lookup_nsap: calloc");
 
 	return tp;
 }
 
 /* Find the hash node that corresponds the protoid 'pi'. */
 
-static inline struct protoidmem *
+static struct protoidmem *
 lookup_protoid(netdissect_options *ndo, const u_char *pi)
 {
-	register u_int i, j;
+	u_int i, j;
 	struct protoidmem *tp;
 
 	/* 5 octets won't be aligned */
@@ -504,17 +557,17 @@ lookup_protoid(netdissect_options *ndo, const u_char *pi)
 	tp->p_proto = j;
 	tp->p_nxt = (struct protoidmem *)calloc(1, sizeof(*tp));
 	if (tp->p_nxt == NULL)
-		(*ndo->ndo_error)(ndo, "lookup_protoid: calloc");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC, "lookup_protoid: calloc");
 
 	return tp;
 }
 
 const char *
-etheraddr_string(netdissect_options *ndo, register const u_char *ep)
+etheraddr_string(netdissect_options *ndo, const uint8_t *ep)
 {
-	register int i;
-	register char *cp;
-	register struct enamemem *tp;
+	int i;
+	char *cp;
+	struct enamemem *tp;
 	int oui;
 	char buf[BUFSIZE];
 
@@ -528,8 +581,8 @@ etheraddr_string(netdissect_options *ndo, register const u_char *ep)
 		if (ether_ntohost(buf2, (const struct ether_addr *)ep) == 0) {
 			tp->e_name = strdup(buf2);
 			if (tp->e_name == NULL)
-				(*ndo->ndo_error)(ndo,
-						  "etheraddr_string: strdup(buf2)");
+				(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+					"etheraddr_string: strdup(buf2)");
 			return (tp->e_name);
 		}
 	}
@@ -545,23 +598,24 @@ etheraddr_string(netdissect_options *ndo, register const u_char *ep)
 	}
 
 	if (!ndo->ndo_nflag) {
-		snprintf(cp, BUFSIZE - (2 + 5*3), " (oui %s)",
+		nd_snprintf(cp, BUFSIZE - (2 + 5*3), " (oui %s)",
 		    tok2str(oui_values, "Unknown", oui));
 	} else
 		*cp = '\0';
 	tp->e_name = strdup(buf);
 	if (tp->e_name == NULL)
-		(*ndo->ndo_error)(ndo, "etheraddr_string: strdup(buf)");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "etheraddr_string: strdup(buf)");
 	return (tp->e_name);
 }
 
 const char *
-le64addr_string(netdissect_options *ndo, const u_char *ep)
+le64addr_string(netdissect_options *ndo, const uint8_t *ep)
 {
 	const unsigned int len = 8;
-	register u_int i;
-	register char *cp;
-	register struct bsnamemem *tp;
+	u_int i;
+	char *cp;
+	struct bsnamemem *tp;
 	char buf[BUFSIZE];
 
 	tp = lookup_bytestring(ndo, ep, len);
@@ -580,18 +634,19 @@ le64addr_string(netdissect_options *ndo, const u_char *ep)
 
 	tp->bs_name = strdup(buf);
 	if (tp->bs_name == NULL)
-		(*ndo->ndo_error)(ndo, "le64addr_string: strdup(buf)");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "le64addr_string: strdup(buf)");
 
 	return (tp->bs_name);
 }
 
 const char *
-linkaddr_string(netdissect_options *ndo, const u_char *ep,
+linkaddr_string(netdissect_options *ndo, const uint8_t *ep,
 		const unsigned int type, const unsigned int len)
 {
-	register u_int i;
-	register char *cp;
-	register struct bsnamemem *tp;
+	u_int i;
+	char *cp;
+	struct bsnamemem *tp;
 
 	if (len == 0)
 		return ("<empty>");
@@ -608,7 +663,8 @@ linkaddr_string(netdissect_options *ndo, const u_char *ep,
 
 	tp->bs_name = cp = (char *)malloc(len*3);
 	if (tp->bs_name == NULL)
-		(*ndo->ndo_error)(ndo, "linkaddr_string: malloc");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "linkaddr_string: malloc");
 	*cp++ = hex[*ep >> 4];
 	*cp++ = hex[*ep++ & 0xf];
 	for (i = len-1; i > 0 ; --i) {
@@ -620,42 +676,14 @@ linkaddr_string(netdissect_options *ndo, const u_char *ep,
 	return (tp->bs_name);
 }
 
-const char *
-etherproto_string(netdissect_options *ndo, u_short port)
-{
-	register char *cp;
-	register struct hnamemem *tp;
-	register uint32_t i = port;
-	char buf[sizeof("0000")];
-
-	for (tp = &eprototable[i & (HASHNAMESIZE-1)]; tp->nxt; tp = tp->nxt)
-		if (tp->addr == i)
-			return (tp->name);
-
-	tp->addr = i;
-	tp->nxt = newhnamemem(ndo);
-
-	cp = buf;
-	NTOHS(port);
-	*cp++ = hex[port >> 12 & 0xf];
-	*cp++ = hex[port >> 8 & 0xf];
-	*cp++ = hex[port >> 4 & 0xf];
-	*cp++ = hex[port & 0xf];
-	*cp++ = '\0';
-	tp->name = strdup(buf);
-	if (tp->name == NULL)
-		(*ndo->ndo_error)(ndo, "etherproto_string: strdup(buf)");
-	return (tp->name);
-}
-
 #define ISONSAP_MAX_LENGTH 20
 const char *
-isonsap_string(netdissect_options *ndo, const u_char *nsap,
-	       register u_int nsap_length)
+isonsap_string(netdissect_options *ndo, const uint8_t *nsap,
+	       u_int nsap_length)
 {
-	register u_int nsap_idx;
-	register char *cp;
-	register struct enamemem *tp;
+	u_int nsap_idx;
+	char *cp;
+	struct enamemem *tp;
 
 	if (nsap_length < 1 || nsap_length > ISONSAP_MAX_LENGTH)
 		return ("isonsap_string: illegal length");
@@ -666,14 +694,15 @@ isonsap_string(netdissect_options *ndo, const u_char *nsap,
 
 	tp->e_name = cp = (char *)malloc(sizeof("xx.xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.xx"));
 	if (cp == NULL)
-		(*ndo->ndo_error)(ndo, "isonsap_string: malloc");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "isonsap_string: malloc");
 
 	for (nsap_idx = 0; nsap_idx < nsap_length; nsap_idx++) {
 		*cp++ = hex[*nsap >> 4];
 		*cp++ = hex[*nsap++ & 0xf];
 		if (((nsap_idx & 1) == 0) &&
 		     (nsap_idx + 1 < nsap_length)) {
-		     	*cp++ = '.';
+			*cp++ = '.';
 		}
 	}
 	*cp = '\0';
@@ -683,8 +712,8 @@ isonsap_string(netdissect_options *ndo, const u_char *nsap,
 const char *
 tcpport_string(netdissect_options *ndo, u_short port)
 {
-	register struct hnamemem *tp;
-	register uint32_t i = port;
+	struct hnamemem *tp;
+	uint32_t i = port;
 	char buf[sizeof("00000")];
 
 	for (tp = &tporttable[i & (HASHNAMESIZE-1)]; tp->nxt; tp = tp->nxt)
@@ -694,18 +723,19 @@ tcpport_string(netdissect_options *ndo, u_short port)
 	tp->addr = i;
 	tp->nxt = newhnamemem(ndo);
 
-	(void)snprintf(buf, sizeof(buf), "%u", i);
+	(void)nd_snprintf(buf, sizeof(buf), "%u", i);
 	tp->name = strdup(buf);
 	if (tp->name == NULL)
-		(*ndo->ndo_error)(ndo, "tcpport_string: strdup(buf)");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "tcpport_string: strdup(buf)");
 	return (tp->name);
 }
 
 const char *
-udpport_string(netdissect_options *ndo, register u_short port)
+udpport_string(netdissect_options *ndo, u_short port)
 {
-	register struct hnamemem *tp;
-	register uint32_t i = port;
+	struct hnamemem *tp;
+	uint32_t i = port;
 	char buf[sizeof("00000")];
 
 	for (tp = &uporttable[i & (HASHNAMESIZE-1)]; tp->nxt; tp = tp->nxt)
@@ -715,19 +745,20 @@ udpport_string(netdissect_options *ndo, register u_short port)
 	tp->addr = i;
 	tp->nxt = newhnamemem(ndo);
 
-	(void)snprintf(buf, sizeof(buf), "%u", i);
+	(void)nd_snprintf(buf, sizeof(buf), "%u", i);
 	tp->name = strdup(buf);
 	if (tp->name == NULL)
-		(*ndo->ndo_error)(ndo, "udpport_string: strdup(buf)");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "udpport_string: strdup(buf)");
 	return (tp->name);
 }
 
 const char *
 ipxsap_string(netdissect_options *ndo, u_short port)
 {
-	register char *cp;
-	register struct hnamemem *tp;
-	register uint32_t i = port;
+	char *cp;
+	struct hnamemem *tp;
+	uint32_t i = port;
 	char buf[sizeof("0000")];
 
 	for (tp = &ipxsaptable[i & (HASHNAMESIZE-1)]; tp->nxt; tp = tp->nxt)
@@ -746,7 +777,8 @@ ipxsap_string(netdissect_options *ndo, u_short port)
 	*cp++ = '\0';
 	tp->name = strdup(buf);
 	if (tp->name == NULL)
-		(*ndo->ndo_error)(ndo, "ipxsap_string: strdup(buf)");
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				  "ipxsap_string: strdup(buf)");
 	return (tp->name);
 }
 
@@ -754,8 +786,8 @@ static void
 init_servarray(netdissect_options *ndo)
 {
 	struct servent *sv;
-	register struct hnamemem *table;
-	register int i;
+	struct hnamemem *table;
+	int i;
 	char buf[sizeof("0000000000")];
 
 	while ((sv = getservent()) != NULL) {
@@ -771,12 +803,13 @@ init_servarray(netdissect_options *ndo)
 		while (table->name)
 			table = table->nxt;
 		if (ndo->ndo_nflag) {
-			(void)snprintf(buf, sizeof(buf), "%d", port);
+			(void)nd_snprintf(buf, sizeof(buf), "%d", port);
 			table->name = strdup(buf);
 		} else
 			table->name = strdup(sv->s_name);
 		if (table->name == NULL)
-			(*ndo->ndo_error)(ndo, "init_servarray: strdup");
+			(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+					  "init_servarray: strdup");
 
 		table->addr = port;
 		table->nxt = newhnamemem(ndo);
@@ -814,8 +847,8 @@ static const struct eproto {
 static void
 init_eprotoarray(netdissect_options *ndo)
 {
-	register int i;
-	register struct hnamemem *table;
+	int i;
+	struct hnamemem *table;
 
 	for (i = 0; eproto_db[i].s; i++) {
 		int j = htons(eproto_db[i].p) & (HASHNAMESIZE-1);
@@ -847,8 +880,8 @@ static const struct protoidlist {
 static void
 init_protoidarray(netdissect_options *ndo)
 {
-	register int i;
-	register struct protoidmem *tp;
+	int i;
+	struct protoidmem *tp;
 	const struct protoidlist *pl;
 	u_char protoid[5];
 
@@ -862,8 +895,8 @@ init_protoidarray(netdissect_options *ndo)
 		tp = lookup_protoid(ndo, protoid);
 		tp->p_name = strdup(eproto_db[i].s);
 		if (tp->p_name == NULL)
-			(*ndo->ndo_error)(ndo,
-					  "init_protoidarray: strdup(eproto_db[i].s)");
+			(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+				"init_protoidarray: strdup(eproto_db[i].s)");
 	}
 	/* Hardwire some SNAP proto ID names */
 	for (pl = protoidlist; pl->name != NULL; ++pl) {
@@ -901,13 +934,13 @@ static const struct etherlist {
 static void
 init_etherarray(netdissect_options *ndo)
 {
-	register const struct etherlist *el;
-	register struct enamemem *tp;
+	const struct etherlist *el;
+	struct enamemem *tp;
 #ifdef USE_ETHER_NTOHOST
 	char name[256];
 #else
-	register struct pcap_etherent *ep;
-	register FILE *fp;
+	struct pcap_etherent *ep;
+	FILE *fp;
 
 	/* Suck in entire ethers file */
 	fp = fopen(PCAP_ETHERS_FILE, "r");
@@ -916,8 +949,8 @@ init_etherarray(netdissect_options *ndo)
 			tp = lookup_emem(ndo, ep->addr);
 			tp->e_name = strdup(ep->name);
 			if (tp->e_name == NULL)
-				(*ndo->ndo_error)(ndo,
-						  "init_etherarray: strdup(ep->addr)");
+				(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+					"init_etherarray: strdup(ep->addr)");
 		}
 		(void)fclose(fp);
 	}
@@ -937,8 +970,8 @@ init_etherarray(netdissect_options *ndo)
 		if (ether_ntohost(name, (const struct ether_addr *)el->addr) == 0) {
 			tp->e_name = strdup(name);
 			if (tp->e_name == NULL)
-				(*ndo->ndo_error)(ndo,
-						  "init_etherarray: strdup(name)");
+				(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+					"init_etherarray: strdup(name)");
 			continue;
 		}
 #endif
@@ -1166,8 +1199,8 @@ static const struct tok ipxsap_db[] = {
 static void
 init_ipxsaparray(netdissect_options *ndo)
 {
-	register int i;
-	register struct hnamemem *table;
+	int i;
+	struct hnamemem *table;
 
 	for (i = 0; ipxsap_db[i].s != NULL; i++) {
 		int j = htons(ipxsap_db[i].v) & (HASHNAMESIZE-1);
@@ -1209,7 +1242,7 @@ init_addrtoname(netdissect_options *ndo, uint32_t localnet, uint32_t mask)
 const char *
 dnaddr_string(netdissect_options *ndo, u_short dnaddr)
 {
-	register struct hnamemem *tp;
+	struct hnamemem *tp;
 
 	for (tp = &dnaddrtable[dnaddr & (HASHNAMESIZE-1)]; tp->nxt != NULL;
 	     tp = tp->nxt)
@@ -1230,7 +1263,7 @@ dnaddr_string(netdissect_options *ndo, u_short dnaddr)
 struct hnamemem *
 newhnamemem(netdissect_options *ndo)
 {
-	register struct hnamemem *p;
+	struct hnamemem *p;
 	static struct hnamemem *ptr = NULL;
 	static u_int num = 0;
 
@@ -1238,7 +1271,8 @@ newhnamemem(netdissect_options *ndo)
 		num = 64;
 		ptr = (struct hnamemem *)calloc(num, sizeof (*ptr));
 		if (ptr == NULL)
-			(*ndo->ndo_error)(ndo, "newhnamemem: calloc");
+			(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+					  "newhnamemem: calloc");
 	}
 	--num;
 	p = ptr++;
@@ -1249,7 +1283,7 @@ newhnamemem(netdissect_options *ndo)
 struct h6namemem *
 newh6namemem(netdissect_options *ndo)
 {
-	register struct h6namemem *p;
+	struct h6namemem *p;
 	static struct h6namemem *ptr = NULL;
 	static u_int num = 0;
 
@@ -1257,7 +1291,8 @@ newh6namemem(netdissect_options *ndo)
 		num = 64;
 		ptr = (struct h6namemem *)calloc(num, sizeof (*ptr));
 		if (ptr == NULL)
-			(*ndo->ndo_error)(ndo, "newh6namemem: calloc");
+			(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+					  "newh6namemem: calloc");
 	}
 	--num;
 	p = ptr++;
@@ -1269,7 +1304,7 @@ const char *
 ieee8021q_tci_string(const uint16_t tci)
 {
 	static char buf[128];
-	snprintf(buf, sizeof(buf), "vlan %u, p %u%s",
+	nd_snprintf(buf, sizeof(buf), "vlan %u, p %u%s",
 	         tci & 0xfff,
 	         tci >> 13,
 	         (tci & 0x1000) ? ", DEI" : "");

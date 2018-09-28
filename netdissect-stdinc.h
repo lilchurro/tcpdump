@@ -41,6 +41,10 @@
 
 #include <errno.h>
 
+#include "compiler-tests.h"
+
+#include "varattrs.h"
+
 /*
  * Get the C99 types, and the PRI[doux]64 format strings, defined.
  */
@@ -205,12 +209,29 @@
 #endif
 
 #ifdef _MSC_VER
-#define stat _stat
-#define open _open
-#define fstat _fstat
-#define read _read
-#define close _close
-#define O_RDONLY _O_RDONLY
+  /*
+   * Microsoft tries to avoid polluting the C namespace with UN*Xisms,
+   * by adding a preceding underscore; we *want* the UN*Xisms, so add
+   * #defines to let us use them.
+   */
+  #define isascii __isascii
+  #define stat _stat
+  #define strdup _strdup
+  #define open _open
+  #define fstat _fstat
+  #define read _read
+  #define close _close
+  #define O_RDONLY _O_RDONLY
+
+  /*
+   * If <crtdbg.h> has been included, and _DEBUG is defined, and
+   * __STDC__ is zero, <crtdbg.h> will define strdup() to call
+   * _strdup_dbg().  So if it's already defined, don't redefine
+   * it.
+   */
+  #ifndef strdup
+    #define strdup _strdup
+  #endif
 #endif  /* _MSC_VER */
 
 /*
@@ -239,8 +260,6 @@ typedef char* caddr_t;
 #endif /* caddr_t */
 
 #define MAXHOSTNAMELEN	64
-#define snprintf _snprintf
-#define vsnprintf _vsnprintf
 
 #else /* _WIN32 */
 
@@ -273,46 +292,66 @@ typedef char* caddr_t;
 
 #endif /* _WIN32 */
 
-#ifndef HAVE___ATTRIBUTE__
-#define __attribute__(x)
-#endif
+/*
+ * Function attributes, for various compilers.
+ */
+#include "funcattrs.h"
 
 /*
- * Used to declare a structure unaligned, so that the C compiler,
- * if necessary, generates code that doesn't assume alignment.
- * This is required because there is no guarantee that the packet
- * data we get from libpcap/WinPcap is properly aligned.
+ * On Windows, snprintf(), with that name and with C99 behavior - i.e.,
+ * guaranteeing that the formatted string is null-terminated - didn't
+ * appear until Visual Studio 2015.  Prior to that, the C runtime had
+ * only _snprintf(), which *doesn't* guarantee that the string is
+ * null-terminated if it is truncated due to the buffer being too
+ * small.  We therefore can't just define snprintf to be _snprintf
+ * and define vsnprintf to be _vsnprintf, as we're relying on null-
+ * termination of strings in all cases.
  *
- * This assumes that, for all compilers that support __attribute__:
+ * Furthermore, some versions of Visual Studio prior to Visual
+ * Studio 2015 had vsnprintf() (but not snprintf()!), but those
+ * versions don't guarantee null termination, either.
  *
- *	1) they support __attribute__((packed));
- *
- *	2) for all instruction set architectures requiring strict
- *	   alignment, declaring a structure with that attribute
- *	   causes the compiler to generate code that handles
- *	   misaligned 2-byte, 4-byte, and 8-byte integral
- *	   quantities.
- *
- * It does not (yet) handle compilers where you can get the compiler
- * to generate code of that sort by some other means.
- *
- * This is required in order to, for example, keep the compiler from
- * generating, for
- *
- *	if (bp->bp_htype == 1 && bp->bp_hlen == 6 && bp->bp_op == BOOTPREQUEST) {
- *
- * in print-bootp.c, code that loads the first 4-byte word of a
- * "struct bootp", masking out the bp_hops field, and comparing the result
- * against 0x01010600.
- *
- * Note: this also requires that padding be put into the structure,
- * at least for compilers where it's implemented as __attribute__((packed)).
+ * We assume all UN*Xes that have snprintf() and vsnprintf() provide
+ * C99 behavior.
  */
-#if !(defined(_MSC_VER) && defined(UNALIGNED))
-/* MSVC may have its own macro defined with the same name and purpose. */
-#undef UNALIGNED
-#define UNALIGNED	__attribute__((packed))
-#endif
+#if defined(_MSC_VER) || defined(__MINGW32__)
+  #if defined(_MSC_VER) && _MSC_VER >= 1900
+    /*
+     * VS 2015 or newer; just use the C runtime's snprintf() and
+     * vsnprintf().
+     */
+    #define nd_snprintf		snprintf
+    #define nd_vsnprintf	vsnprintf
+  #else /* defined(_MSC_VER) && _MSC_VER >= 1900 */
+    /*
+     * VS prior to 2015, or MingGW; assume we have _snprintf_s() and
+     * _vsnprintf_s(), which guarantee null termination.
+     */
+    #define nd_snprintf(buf, buflen, fmt, ...) \
+        _snprintf_s(buf, buflen, _TRUNCATE, fmt, __VA_ARGS__)
+    #define nd_vsnprintf(buf, buflen, fmt, ap) \
+        _vsnprintf_s(buf, buflen, _TRUNCATE, fmt, ap)
+  #endif /* defined(_MSC_VER) && _MSC_VER >= 1900 */
+#else /* defined(_MSC_VER) || defined(__MINGW32__) */
+  /*
+   * Some other compiler, which we assume to be a UN*X compiler.
+   * Use the system's snprintf() if we have it, otherwise use
+   * our own implementation
+   */
+  #ifdef HAVE_SNPRINTF
+    #define nd_snprintf		snprintf
+  #else /* HAVE_SNPRINTF */
+    int nd_snprintf (char *str, size_t sz, FORMAT_STRING(const char *format), ...)
+        PRINTFLIKE(3, 4);
+  #endif /* HAVE_SNPRINTF */
+
+  #ifdef HAVE_VSNPRINTF
+    #define nd_vsnprintf	vsnprintf
+  #else /* HAVE_VSNPRINTF */
+    int nd_vsnprintf (char *str, size_t sz, FORMAT_STRING(const char *format),
+        va_list ap) PRINTFLIKE(3, 0);
+  #endif /* HAVE_VSNPRINTF */
+#endif /* defined(_MSC_VER) || defined(__MINGW32__) */
 
 /*
  * fopen() read and write modes for text files and binary files.
@@ -335,8 +374,8 @@ typedef char* caddr_t;
  * an 80386, so, for example, it avoids the bswap instruction added in
  * the 80486.
  *
- * (We don't use them on OS X; Apple provides their own, which *doesn't*
- * avoid the bswap instruction, as OS X only supports machines that
+ * (We don't use them on macOS; Apple provides their own, which *doesn't*
+ * avoid the bswap instruction, as macOS only supports machines that
  * have it.)
  */
 #if defined(__GNUC__) && defined(__i386__) && !defined(__APPLE__) && !defined(__ntohl)
@@ -473,21 +512,17 @@ struct in6_addr {
  */
 
 /*
- * Function attributes, for various compilers.
+ * Statement attributes, for various compilers.
+ *
+ * This was introduced sufficiently recently that compilers implementing
+ * it also implement __has_attribute() (for example, GCC 5.0 and later
+ * have __has_attribute(), and the "fallthrough" attribute was introduced
+ * in GCC 7).
  */
-#include "funcattrs.h"
-
-#ifndef min
-#define min(a,b) ((a)>(b)?(b):(a))
-#endif
-#ifndef max
-#define max(a,b) ((b)>(a)?(b):(a))
-#endif
-
-#ifdef __ATTRIBUTE___FALLTHROUGH_OK
+#if __has_attribute(fallthrough)
 #  define ND_FALL_THROUGH __attribute__ ((fallthrough))
 #else
 #  define ND_FALL_THROUGH
-#endif /* __ATTRIBUTE___FALLTHROUGH_OK */
+#endif /*  __has_attribute(fallthrough) */
 
 #endif /* netdissect_stdinc_h */

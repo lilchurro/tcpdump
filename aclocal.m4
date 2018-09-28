@@ -169,7 +169,7 @@ AC_DEFUN(AC_LBL_C_INIT,
 		    ;;
 
 	    osf*)
-	    	    #
+		    #
 		    # Presumed to be DEC OSF/1, Digital UNIX, or
 		    # Tru64 UNIX.
 		    #
@@ -371,8 +371,7 @@ AC_DEFUN(AC_LBL_CHECK_DEPENDENCY_GENERATION_OPT,
 	if test ! -z "$ac_lbl_dependency_flag"; then
 		AC_LANG_CONFTEST(
 		    [AC_LANG_SOURCE([[int main(void) { return 0; }]])])
-		echo "$CC" $ac_lbl_dependency_flag conftest.c >&5
-		if "$CC" $ac_lbl_dependency_flag conftest.c >/dev/null 2>&1; then
+		if AC_RUN_LOG([eval "$CC $ac_lbl_dependency_flag conftest.c >/dev/null 2>&1"]); then
 			AC_MSG_RESULT([yes, with $ac_lbl_dependency_flag])
 			DEPENDENCY_CFLAG="$ac_lbl_dependency_flag"
 			MKDEP='${srcdir}/mkdep'
@@ -594,7 +593,12 @@ AC_DEFUN(AC_LBL_LIBPCAP,
         fi
     else
         #
-        # We found a local libpcap.
+        # We found a local libpcap.  Add it to the dependencies for
+        # tcpdump.
+        #
+        $1=$libpcap
+
+        #
         # Look for its pcap-config script.
         #
         AC_PATH_PROG(PCAP_CONFIG, pcap-config,, $local_pcap_dir)
@@ -619,7 +623,6 @@ AC_DEFUN(AC_LBL_LIBPCAP,
             # It doesn't have a pcap-config script.
             # Make sure it has a pcap.h file.
             #
-            $1=$libpcap
             places=`ls $srcdir/.. | sed -e 's,/$,,' -e "s,^,$srcdir/../," | \
                 egrep '/libpcap-[[0-9]]*.[[0-9]]*(.[[0-9]]*)?([[ab]][[0-9]]*)?$'`
             places2=`ls .. | sed -e 's,/$,,' -e "s,^,../," | \
@@ -867,19 +870,19 @@ AC_DEFUN(AC_LBL_DEVEL,
 	    #
 	    if test "$ac_lbl_cc_dont_try_gcc_dashW" != yes; then
 		    AC_LBL_CHECK_UNKNOWN_WARNING_OPTION_ERROR()
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wall)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wmissing-prototypes)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wstrict-prototypes)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wwrite-strings)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wpointer-arith)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wcast-qual)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wshadow)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wdeclaration-after-statement)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wpedantic)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wold-style-definition)
-		    AC_LBL_CHECK_COMPILER_OPT($1, -Wused-but-marked-unused)
 		    AC_LBL_CHECK_COMPILER_OPT($1, -W)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wall)
 		    AC_LBL_CHECK_COMPILER_OPT($1, -Wassign-enum)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wcast-qual)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wmissing-prototypes)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wold-style-definition)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wpedantic)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wpointer-arith)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wshadow)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wstrict-prototypes)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wunreachable-code-return)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wused-but-marked-unused)
+		    AC_LBL_CHECK_COMPILER_OPT($1, -Wwrite-strings)
 	    fi
 	    AC_LBL_CHECK_DEPENDENCY_GENERATION_OPT()
 	    #
@@ -986,11 +989,11 @@ dnl This test exists so that every application developer does not test
 dnl this in a different, and subtly broken fashion.
 
 dnl It has been argued that this test should be broken up into two
-dnl seperate tests, one for the resolver libraries, and one for the
+dnl separate tests, one for the resolver libraries, and one for the
 dnl libraries necessary for using Sockets API. Unfortunately, the two
 dnl are carefully intertwined and allowing the autoconf user to use
-dnl them independantly potentially results in unfortunate ordering
-dnl dependancies -- as such, such component macros would have to
+dnl them independently potentially results in unfortunate ordering
+dnl dependencies -- as such, such component macros would have to
 dnl carefully use indirection and be aware if the other components were
 dnl executed. Since other autoconf macros do not go to this trouble,
 dnl and almost no applications use sockets without the resolver, this
@@ -1045,119 +1048,6 @@ dnl LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 dnl OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 dnl SUCH DAMAGE.
 
-dnl
-dnl Test for __attribute__
-dnl
-
-AC_DEFUN(AC_C___ATTRIBUTE__, [
-AC_MSG_CHECKING(for __attribute__)
-AC_CACHE_VAL(ac_cv___attribute__, [
-AC_COMPILE_IFELSE([
-  AC_LANG_SOURCE([[
-#include <stdlib.h>
-
-static void foo(void) __attribute__ ((noreturn));
-
-static void
-foo(void)
-{
-  exit(1);
-}
-
-int
-main(int argc, char **argv)
-{
-  foo();
-}
-  ]])],
-ac_cv___attribute__=yes,
-ac_cv___attribute__=no)])
-if test "$ac_cv___attribute__" = "yes"; then
-  AC_DEFINE(HAVE___ATTRIBUTE__, 1, [define if your compiler has __attribute__])
-else
-  #
-  # We can't use __attribute__, so we can't use __attribute__((unused)),
-  # so we define _U_ to an empty string.
-  #
-  V_DEFS="$V_DEFS -D_U_=\"\""
-fi
-AC_MSG_RESULT($ac_cv___attribute__)
-])
-
-
-dnl
-dnl Test whether __attribute__((unused)) can be used without warnings
-dnl
-
-AC_DEFUN(AC_C___ATTRIBUTE___UNUSED, [
-AC_MSG_CHECKING([whether __attribute__((unused)) can be used without warnings])
-AC_CACHE_VAL(ac_cv___attribute___unused, [
-save_CFLAGS="$CFLAGS"
-CFLAGS="$CFLAGS $ac_lbl_cc_force_warning_errors"
-AC_COMPILE_IFELSE([
-  AC_LANG_SOURCE([[
-#include <stdlib.h>
-#include <stdio.h>
-
-int
-main(int argc  __attribute((unused)), char **argv __attribute((unused)))
-{
-  printf("Hello, world!\n");
-  return 0;
-}
-  ]])],
-ac_cv___attribute___unused=yes,
-ac_cv___attribute___unused=no)])
-CFLAGS="$save_CFLAGS"
-if test "$ac_cv___attribute___unused" = "yes"; then
-  V_DEFS="$V_DEFS -D_U_=\"__attribute__((unused))\""
-else
-  V_DEFS="$V_DEFS -D_U_=\"\""
-fi
-AC_MSG_RESULT($ac_cv___attribute___unused)
-])
-
-dnl
-dnl Test whether __attribute__((fallthrough)) can be used without warnings
-dnl
-
-AC_DEFUN(AC_C___ATTRIBUTE___FALLTHROUGH, [
-AC_MSG_CHECKING([whether __attribute__((fallthrough)) can be used without warnings])
-AC_CACHE_VAL(ac_cv___attribute___fallthrough, [
-save_CFLAGS="$CFLAGS"
-CFLAGS="$CFLAGS $ac_lbl_cc_force_warning_errors"
-AC_COMPILE_IFELSE([
-  AC_LANG_SOURCE([[
-#include <stdio.h>
-
-int
-main(int argc, char **argv)
-{
-	int x = 1;
-	switch (x)
-	{
-	case 1:
-		printf ("x == %d\n", x);
-		__attribute__ ((fallthrough));
-	case 2:
-		printf ("x == %d\n", x);
-		break;
-	default:
-		return 0;
-	}
-	return x;
-}
-  ]])],
-ac_cv___attribute___fallthrough=yes,
-ac_cv___attribute___fallthrough=no)])
-CFLAGS="$save_CFLAGS"
-if test "$ac_cv___attribute___fallthrough" = "yes"; then
-  AC_DEFINE(__ATTRIBUTE___FALLTHROUGH_OK, 1,
-    [define if your compiler allows __attribute__((fallthrough)) without a warning])
-fi
-AC_MSG_RESULT($ac_cv___attribute___fallthrough)
-])
-
 AC_DEFUN(AC_LBL_SSLEAY,
     [
 	#
@@ -1181,9 +1071,9 @@ AC_DEFUN(AC_LBL_SSLEAY,
 	# Or should we just look for "libcrypto.*"?
 	#
 	if test -d "$1/$tmplib" -a \( -f "$1/$tmplib/libcrypto.a" -o \
-		          	    -f "$1/$tmplib/libcrypto.so" -o \
-		          	    -f "$1/$tmplib/libcrypto.sl" -o \
-			  	    -f "$1/$tmplib/libcrypto.dylib" \); then
+				    -f "$1/$tmplib/libcrypto.so" -o \
+				    -f "$1/$tmplib/libcrypto.sl" -o \
+				    -f "$1/$tmplib/libcrypto.dylib" \); then
 		ac_cv_ssleay_path="$1"
 	fi
 

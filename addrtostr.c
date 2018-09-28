@@ -37,10 +37,10 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 #include "addrtostr.h"
 
 #include <stdio.h>
@@ -191,7 +191,7 @@ addrtostr6 (const void *src, char *dst, size_t size)
       space_left -= added_space;
       break;
     }
-    snprintfed = snprintf (dp, space_left, "%x", words[i]);
+    snprintfed = nd_snprintf (dp, space_left, "%x", words[i]);
     if (snprintfed < 0)
         return (NULL);
     if ((size_t) snprintfed >= space_left)

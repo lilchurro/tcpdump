@@ -35,7 +35,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
 #include <netdissect-stdinc.h>
@@ -65,9 +65,9 @@ const char *etc_path(const char *file)
         return (file);
     else
 #ifdef _WIN32
-    snprintf(path, sizeof(path), "%s%s%s", env, __PATH_ETC_INET, file);
+    nd_snprintf(path, sizeof(path), "%s%s%s", env, __PATH_ETC_INET, file);
 #else
-    snprintf(path, sizeof(path), "%s%s", env, file);
+    nd_snprintf(path, sizeof(path), "%s%s", env, file);
 #endif
     return (path);
 }
@@ -96,7 +96,7 @@ struct servent *
 getservent(void)
 {
     char *p;
-    register char *cp, **q;
+    char *cp, **q;
 
     if (servf == NULL && (servf = fopen(etc_path(__PATH_SERVICES), "r")) == NULL)
         return (NULL);

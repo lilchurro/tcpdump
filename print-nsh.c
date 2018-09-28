@@ -26,15 +26,14 @@
 /* specification: draft-ietf-sfc-nsh-01 */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 
 #include "netdissect.h"
 #include "extract.h"
 
-static const char tstr[] = " [|NSH]";
 static const struct tok nsh_flags [] = {
     { 0x20, "O" },
     { 0x10, "C" },
@@ -48,10 +47,10 @@ static const struct tok nsh_flags [] = {
 void
 nsh_print(netdissect_options *ndo, const u_char *bp, u_int len)
 {
-    int n, vn;
+    u_int n, vn;
     uint8_t ver;
     uint8_t flags;
-    uint8_t length;
+    u_int length;
     uint8_t md_type;
     uint8_t next_protocol;
     uint32_t service_path_id;
@@ -62,6 +61,7 @@ nsh_print(netdissect_options *ndo, const u_char *bp, u_int len)
     uint8_t tlv_len;
     u_int next_len;
 
+    ndo->ndo_protocol = "nsh";
     /* print Base Header and Service Path Header */
     if (len < NSH_BASE_HDR_LEN + NSH_SERVICE_PATH_HDR_LEN)
         goto trunc;
@@ -82,20 +82,20 @@ nsh_print(netdissect_options *ndo, const u_char *bp, u_int len)
     service_index = EXTRACT_U_1(bp);
     bp += 1;
 
-    ND_PRINT((ndo, "NSH, "));
+    ND_PRINT("NSH, ");
     if (ndo->ndo_vflag > 1) {
-        ND_PRINT((ndo, "ver %d, ", ver));
+        ND_PRINT("ver %u, ", ver);
     }
-    ND_PRINT((ndo, "flags [%s], ", bittok2str_nosep(nsh_flags, "none", flags)));
+    ND_PRINT("flags [%s], ", bittok2str_nosep(nsh_flags, "none", flags));
     if (ndo->ndo_vflag > 2) {
-        ND_PRINT((ndo, "length %d, ", length));
-        ND_PRINT((ndo, "md type 0x%x, ", md_type));
+        ND_PRINT("length %u, ", length);
+        ND_PRINT("md type 0x%x, ", md_type);
     }
     if (ndo->ndo_vflag > 1) {
-        ND_PRINT((ndo, "next-protocol 0x%x, ", next_protocol));
+        ND_PRINT("next-protocol 0x%x, ", next_protocol);
     }
-    ND_PRINT((ndo, "service-path-id 0x%06x, ", service_path_id));
-    ND_PRINT((ndo, "service-index 0x%x", service_index));
+    ND_PRINT("service-path-id 0x%06x, ", service_path_id);
+    ND_PRINT("service-index 0x%x", service_index);
 
     /* Make sure we have all the headers */
     if (len < length * NSH_HDR_WORD_SIZE)
@@ -119,7 +119,7 @@ nsh_print(netdissect_options *ndo, const u_char *bp, u_int len)
             for (n = 0; n < length - 2; n++) {
                 ctx = EXTRACT_BE_U_4(bp);
                 bp += NSH_HDR_WORD_SIZE;
-                ND_PRINT((ndo, "\n        Context[%02d]: 0x%08x", n, ctx));
+                ND_PRINT("\n        Context[%02u]: 0x%08x", n, ctx);
             }
         }
         else if (md_type == 0x02) {
@@ -132,33 +132,33 @@ nsh_print(netdissect_options *ndo, const u_char *bp, u_int len)
                 tlv_len   = EXTRACT_U_1(bp);
                 bp += 1;
 
-                ND_PRINT((ndo, "\n        TLV Class %d, Type %d, Len %d",
-                          tlv_class, tlv_type, tlv_len));
+                ND_PRINT("\n        TLV Class %u, Type %u, Len %u",
+                          tlv_class, tlv_type, tlv_len);
 
                 n += 1;
 
                 if (length - 2 < n + tlv_len) {
-                    ND_PRINT((ndo, " ERROR: invalid-tlv-length"));
+                    ND_PRINT(" ERROR: invalid-tlv-length");
                     return;
                 }
 
                 for (vn = 0; vn < tlv_len; vn++) {
                     ctx = EXTRACT_BE_U_4(bp);
                     bp += NSH_HDR_WORD_SIZE;
-                    ND_PRINT((ndo, "\n            Value[%02d]: 0x%08x", vn, ctx));
+                    ND_PRINT("\n            Value[%02u]: 0x%08x", vn, ctx);
                 }
                 n += tlv_len;
             }
         }
         else {
-            ND_PRINT((ndo, "ERROR: unknown-next-protocol"));
+            ND_PRINT("ERROR: unknown-next-protocol");
             return;
         }
     }
     else {
         bp += (length - 2) * NSH_HDR_WORD_SIZE;
     }
-    ND_PRINT((ndo, ndo->ndo_vflag ? "\n    " : ": "));
+    ND_PRINT(ndo->ndo_vflag ? "\n    " : ": ");
 
     /* print Next Protocol */
     next_len = len - length * NSH_HDR_WORD_SIZE;
@@ -173,13 +173,13 @@ nsh_print(netdissect_options *ndo, const u_char *bp, u_int len)
         ether_print(ndo, bp, next_len, ndo->ndo_snapend - bp, NULL, NULL);
         break;
     default:
-        ND_PRINT((ndo, "ERROR: unknown-next-protocol"));
+        ND_PRINT("ERROR: unknown-next-protocol");
         return;
     }
 
     return;
 
 trunc:
-    ND_PRINT((ndo, "%s", tstr));
+    nd_print_trunc(ndo);
 }
 

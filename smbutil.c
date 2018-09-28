@@ -7,10 +7,10 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -128,7 +128,7 @@ name_interpret(netdissect_options *ndo,
                const u_char *in, const u_char *maxbuf, char *out)
 {
     int ret;
-    int len;
+    u_int len;
 
     if (in >= maxbuf)
 	return(-1);	/* name goes past the end of the buffer */
@@ -138,10 +138,10 @@ name_interpret(netdissect_options *ndo,
 
     *out=0;
 
-    if (len > 30 || len < 1)
+    if (len > 30 || len == 0)
 	return(0);
 
-    while (len--) {
+    while (len) {
 	ND_TCHECK_2(in);
 	if (in + 1 >= maxbuf)
 	    return(-1);	/* name goes past the end of the buffer */
@@ -153,6 +153,7 @@ name_interpret(netdissect_options *ndo,
 	*out = ((EXTRACT_U_1(in) - 'A') << 4) + (EXTRACT_U_1(in + 1) - 'A');
 	in += 2;
 	out++;
+	len--;
     }
     *out = 0;
     ret = out[-1];
@@ -168,7 +169,7 @@ trunc:
  */
 static const u_char *
 name_ptr(netdissect_options *ndo,
-         const u_char *buf, int ofs, const u_char *maxbuf)
+         const u_char *buf, u_int ofs, const u_char *maxbuf)
 {
     const u_char *p;
     u_char c;
@@ -208,7 +209,7 @@ trunc:
  */
 static int
 name_extract(netdissect_options *ndo,
-             const u_char *buf, int ofs, const u_char *maxbuf, char *name)
+             const u_char *buf, u_int ofs, const u_char *maxbuf, char *name)
 {
     const u_char *p = name_ptr(ndo, buf, ofs, maxbuf);
     if (p == NULL)
@@ -223,9 +224,9 @@ name_extract(netdissect_options *ndo,
  */
 static int
 name_len(netdissect_options *ndo,
-         const unsigned char *s, const unsigned char *maxbuf)
+         const u_char *s, const u_char *maxbuf)
 {
-    const unsigned char *s0 = s;
+    const u_char *s0 = s;
     unsigned char c;
 
     if (s >= maxbuf)
@@ -234,11 +235,11 @@ name_len(netdissect_options *ndo,
     c = EXTRACT_U_1(s);
     if ((c & 0xC0) == 0xC0)
 	return(2);
-    while (*s) {
+    while (EXTRACT_U_1(s)) {
 	if (s >= maxbuf)
 	    return(-1);	/* name goes past the end of the buffer */
 	ND_TCHECK_1(s);
-	s += (*s) + 1;
+	s += EXTRACT_U_1(s) + 1;
 	ND_TCHECK_1(s);
     }
     return(PTR_DIFF(s, s0) + 1);
@@ -249,11 +250,11 @@ trunc:
 
 static void
 print_asc(netdissect_options *ndo,
-          const unsigned char *buf, int len)
+          const u_char *buf, u_int len)
 {
-    int i;
+    u_int i;
     for (i = 0; i < len; i++)
-        safeputchar(ndo, EXTRACT_U_1(buf + i));
+        fn_print_char(ndo, EXTRACT_U_1(buf + i));
 }
 
 static const char *
@@ -274,51 +275,50 @@ name_type_str(int name_type)
 }
 
 void
-smb_print_data(netdissect_options *ndo, const unsigned char *buf, int len)
+smb_data_print(netdissect_options *ndo, const u_char *buf, u_int len)
 {
-    int i = 0;
+    u_int i = 0;
 
-    if (len <= 0)
+    if (len == 0)
 	return;
-    ND_PRINT((ndo, "[%03X] ", i));
+    ND_PRINT("[%03X] ", i);
     for (i = 0; i < len; /*nothing*/) {
         ND_TCHECK_1(buf + i);
-	ND_PRINT((ndo, "%02X ", EXTRACT_U_1(buf + i) & 0xff));
+	ND_PRINT("%02X ", EXTRACT_U_1(buf + i) & 0xff);
 	i++;
 	if (i%8 == 0)
-	    ND_PRINT((ndo, " "));
+	    ND_PRINT(" ");
 	if (i % 16 == 0) {
 	    print_asc(ndo, buf + i - 16, 8);
-	    ND_PRINT((ndo, " "));
+	    ND_PRINT(" ");
 	    print_asc(ndo, buf + i - 8, 8);
-	    ND_PRINT((ndo, "\n"));
+	    ND_PRINT("\n");
 	    if (i < len)
-		ND_PRINT((ndo, "[%03X] ", i));
+		ND_PRINT("[%03X] ", i);
 	}
     }
     if (i % 16) {
 	int n;
 
 	n = 16 - (i % 16);
-	ND_PRINT((ndo, " "));
+	ND_PRINT(" ");
 	if (n>8)
-	    ND_PRINT((ndo, " "));
+	    ND_PRINT(" ");
 	while (n--)
-	    ND_PRINT((ndo, "   "));
+	    ND_PRINT("   ");
 
 	n = min(8, i % 16);
 	print_asc(ndo, buf + i - (i % 16), n);
-	ND_PRINT((ndo, " "));
+	ND_PRINT(" ");
 	n = (i % 16) - n;
 	if (n > 0)
 	    print_asc(ndo, buf + i - n, n);
-	ND_PRINT((ndo, "\n"));
+	ND_PRINT("\n");
     }
     return;
 
 trunc:
-    ND_PRINT((ndo, "\n"));
-    ND_PRINT((ndo, "WARNING: Short packet. Try increasing the snap length\n"));
+    nd_print_trunc(ndo);
 }
 
 
@@ -327,12 +327,12 @@ write_bits(netdissect_options *ndo,
            unsigned int val, const char *fmt)
 {
     const char *p = fmt;
-    int i = 0;
+    u_int i = 0;
 
     while ((p = strchr(fmt, '|'))) {
 	size_t l = PTR_DIFF(p, fmt);
 	if (l && (val & (1 << i)))
-	    ND_PRINT((ndo, "%.*s ", (int)l, fmt));
+	    ND_PRINT("%.*s ", (int)l, fmt);
 	fmt = p + 1;
 	i++;
     }
@@ -461,12 +461,12 @@ smb_fdata1(netdissect_options *ndo,
 	  {
 	    char bitfmt[128];
 	    char *p;
-	    int l;
+	    u_int l;
 
 	    p = strchr(++fmt, '}');
 	    l = PTR_DIFF(p, fmt);
 
-	    if ((unsigned int)l > sizeof(bitfmt) - 1)
+	    if (l > sizeof(bitfmt) - 1)
 		    l = sizeof(bitfmt)-1;
 
 	    strncpy(bitfmt, fmt, l);
@@ -497,29 +497,29 @@ smb_fdata1(netdissect_options *ndo,
 	    unsigned int x;
 	    ND_TCHECK_1(buf);
 	    x = EXTRACT_U_1(buf);
-	    ND_PRINT((ndo, "%u (0x%x)", x, x));
+	    ND_PRINT("%u (0x%x)", x, x);
 	    buf += 1;
 	    fmt++;
 	    break;
 	  }
 	case 'd':
 	  {
-	    unsigned int x;
+	    int x;
 	    ND_TCHECK_2(buf);
-	    x = reverse ? EXTRACT_BE_U_2(buf) :
-			  EXTRACT_LE_U_2(buf);
-	    ND_PRINT((ndo, "%d (0x%x)", x, x));
+	    x = reverse ? EXTRACT_BE_S_2(buf) :
+			  EXTRACT_LE_S_2(buf);
+	    ND_PRINT("%d (0x%x)", x, x);
 	    buf += 2;
 	    fmt++;
 	    break;
 	  }
 	case 'D':
 	  {
-	    unsigned int x;
+	    int x;
 	    ND_TCHECK_4(buf);
-	    x = reverse ? EXTRACT_BE_U_4(buf) :
-			  EXTRACT_LE_U_4(buf);
-	    ND_PRINT((ndo, "%d (0x%x)", x, x));
+	    x = reverse ? EXTRACT_BE_S_4(buf) :
+			  EXTRACT_LE_S_4(buf);
+	    ND_PRINT("%d (0x%x)", x, x);
 	    buf += 4;
 	    fmt++;
 	    break;
@@ -530,8 +530,30 @@ smb_fdata1(netdissect_options *ndo,
 	    ND_TCHECK_8(buf);
 	    x = reverse ? EXTRACT_BE_U_8(buf) :
 			  EXTRACT_LE_U_8(buf);
-	    ND_PRINT((ndo, "%" PRIu64 " (0x%" PRIx64 ")", x, x));
+	    ND_PRINT("%" PRIu64 " (0x%" PRIx64 ")", x, x);
 	    buf += 8;
+	    fmt++;
+	    break;
+	  }
+	case 'u':
+	  {
+	    unsigned int x;
+	    ND_TCHECK_2(buf);
+	    x = reverse ? EXTRACT_BE_U_2(buf) :
+			  EXTRACT_LE_U_2(buf);
+	    ND_PRINT("%u (0x%x)", x, x);
+	    buf += 2;
+	    fmt++;
+	    break;
+	  }
+	case 'U':
+	  {
+	    unsigned int x;
+	    ND_TCHECK_4(buf);
+	    x = reverse ? EXTRACT_BE_U_4(buf) :
+			  EXTRACT_LE_U_4(buf);
+	    ND_PRINT("%u (0x%x)", x, x);
+	    buf += 4;
 	    fmt++;
 	    break;
 	  }
@@ -546,7 +568,7 @@ smb_fdata1(netdissect_options *ndo,
 	    x2 = reverse ? EXTRACT_BE_U_4(buf + 4) :
 			   EXTRACT_LE_U_4(buf + 4);
 	    x = (((uint64_t)x1) << 32) | x2;
-	    ND_PRINT((ndo, "%" PRIu64 " (0x%" PRIx64 ")", x, x));
+	    ND_PRINT("%" PRIu64 " (0x%" PRIx64 ")", x, x);
 	    buf += 8;
 	    fmt++;
 	    break;
@@ -556,7 +578,7 @@ smb_fdata1(netdissect_options *ndo,
 	    unsigned int x;
 	    ND_TCHECK_1(buf);
 	    x = EXTRACT_U_1(buf);
-	    ND_PRINT((ndo, "0x%X", x));
+	    ND_PRINT("0x%X", x);
 	    buf += 1;
 	    fmt++;
 	    break;
@@ -567,7 +589,7 @@ smb_fdata1(netdissect_options *ndo,
 	    ND_TCHECK_2(buf);
 	    x = reverse ? EXTRACT_BE_U_2(buf) :
 			  EXTRACT_LE_U_2(buf);
-	    ND_PRINT((ndo, "0x%X", x));
+	    ND_PRINT("0x%X", x);
 	    buf += 2;
 	    fmt++;
 	    break;
@@ -578,7 +600,7 @@ smb_fdata1(netdissect_options *ndo,
 	    ND_TCHECK_4(buf);
 	    x = reverse ? EXTRACT_BE_U_4(buf) :
 			  EXTRACT_LE_U_4(buf);
-	    ND_PRINT((ndo, "0x%X", x));
+	    ND_PRINT("0x%X", x);
 	    buf += 4;
 	    fmt++;
 	    break;
@@ -591,23 +613,25 @@ smb_fdata1(netdissect_options *ndo,
 	    case 'b':
 		ND_TCHECK_1(buf);
 		stringlen = EXTRACT_U_1(buf);
-		ND_PRINT((ndo, "%u", stringlen));
+		ND_PRINT("%u", stringlen);
 		buf += 1;
 		break;
 
 	    case 'd':
+	    case 'u':
 		ND_TCHECK_2(buf);
 		stringlen = reverse ? EXTRACT_BE_U_2(buf) :
 				      EXTRACT_LE_U_2(buf);
-		ND_PRINT((ndo, "%u", stringlen));
+		ND_PRINT("%u", stringlen);
 		buf += 2;
 		break;
 
 	    case 'D':
+	    case 'U':
 		ND_TCHECK_4(buf);
 		stringlen = reverse ? EXTRACT_BE_U_4(buf) :
 				      EXTRACT_LE_U_4(buf);
-		ND_PRINT((ndo, "%u", stringlen));
+		ND_PRINT("%u", stringlen);
 		buf += 4;
 		break;
 	    }
@@ -625,7 +649,7 @@ smb_fdata1(netdissect_options *ndo,
 	    s = unistr(ndo, buf, &len, (*fmt == 'R') ? 0 : unicodestr);
 	    if (s == NULL)
 		goto trunc;
-	    ND_PRINT((ndo, "%s", s));
+	    ND_PRINT("%s", s);
 	    buf += len;
 	    fmt++;
 	    break;
@@ -638,14 +662,14 @@ smb_fdata1(netdissect_options *ndo,
 
 	    ND_TCHECK_1(buf);
 	    if (EXTRACT_U_1(buf) != 4 && EXTRACT_U_1(buf) != 2) {
-		ND_PRINT((ndo, "Error! ASCIIZ buffer of type %u", EXTRACT_U_1(buf)));
+		ND_PRINT("Error! ASCIIZ buffer of type %u", EXTRACT_U_1(buf));
 		return maxbuf;	/* give up */
 	    }
 	    len = 0;
 	    s = unistr(ndo, buf + 1, &len, (*fmt == 'Y') ? 0 : unicodestr);
 	    if (s == NULL)
 		goto trunc;
-	    ND_PRINT((ndo, "%s", s));
+	    ND_PRINT("%s", s);
 	    buf += len + 1;
 	    fmt++;
 	    break;
@@ -654,7 +678,7 @@ smb_fdata1(netdissect_options *ndo,
 	  {
 	    int l = atoi(fmt + 1);
 	    ND_TCHECK_LEN(buf, l);
-	    ND_PRINT((ndo, "%-*.*s", l, l, buf));
+	    ND_PRINT("%-*.*s", l, l, buf);
 	    buf += l;
 	    fmt++;
 	    while (isdigit((unsigned char)*fmt))
@@ -664,7 +688,7 @@ smb_fdata1(netdissect_options *ndo,
 	case 'c':
 	  {
 	    ND_TCHECK_LEN(buf, stringlen);
-	    ND_PRINT((ndo, "%-*.*s", (int)stringlen, (int)stringlen, buf));
+	    ND_PRINT("%-*.*s", (int)stringlen, (int)stringlen, buf);
 	    buf += stringlen;
 	    fmt++;
 	    while (isdigit((unsigned char)*fmt))
@@ -677,7 +701,7 @@ smb_fdata1(netdissect_options *ndo,
 	    s = unistr(ndo, buf, &stringlen, unicodestr);
 	    if (s == NULL)
 		goto trunc;
-	    ND_PRINT((ndo, "%s", s));
+	    ND_PRINT("%s", s);
 	    buf += stringlen;
 	    fmt++;
 	    break;
@@ -687,7 +711,7 @@ smb_fdata1(netdissect_options *ndo,
 	    int l = atoi(fmt + 1);
 	    ND_TCHECK_LEN(buf, l);
 	    while (l--) {
-		ND_PRINT((ndo, "%02x", EXTRACT_U_1(buf)));
+		ND_PRINT("%02x", EXTRACT_U_1(buf));
 		buf++;
 	    }
 	    fmt++;
@@ -712,14 +736,14 @@ smb_fdata1(netdissect_options *ndo,
 		if (len < 0)
 		    goto trunc;
 		buf += len;
-		ND_PRINT((ndo, "%-15.15s NameType=0x%02X (%s)", nbuf, name_type,
-		    name_type_str(name_type)));
+		ND_PRINT("%-15.15s NameType=0x%02X (%s)", nbuf, name_type,
+		    name_type_str(name_type));
 		break;
 	    case 2:
 		ND_TCHECK_1(buf + 15);
 		name_type = EXTRACT_U_1(buf + 15);
-		ND_PRINT((ndo, "%-15.15s NameType=0x%02X (%s)", buf, name_type,
-		    name_type_str(name_type)));
+		ND_PRINT("%-15.15s NameType=0x%02X (%s)", buf, name_type,
+		    name_type_str(name_type));
 		buf += 16;
 		break;
 	    }
@@ -771,27 +795,26 @@ smb_fdata1(netdissect_options *ndo,
 		    tstring = "(Can't convert time)\n";
 	    } else
 		tstring = "NULL\n";
-	    ND_PRINT((ndo, "%s", tstring));
+	    ND_PRINT("%s", tstring);
 	    fmt++;
 	    while (isdigit((unsigned char)*fmt))
 		fmt++;
 	    break;
 	  }
 	default:
-	    ND_PRINT((ndo, "%c", *fmt));
+	    ND_PRINT("%c", *fmt);
 	    fmt++;
 	    break;
 	}
     }
 
     if (buf >= maxbuf && *fmt)
-	ND_PRINT((ndo, "END OF BUFFER\n"));
+	ND_PRINT("END OF BUFFER\n");
 
     return(buf);
 
 trunc:
-    ND_PRINT((ndo, "\n"));
-    ND_PRINT((ndo, "WARNING: Short packet. Try increasing the snap length\n"));
+    nd_print_trunc(ndo);
     return(NULL);
 }
 
@@ -856,15 +879,15 @@ smb_fdata(netdissect_options *ndo,
 	    break;
 
 	default:
-	    ND_PRINT((ndo, "%c", *fmt));
+	    ND_PRINT("%c", *fmt);
 	    fmt++;
 	    break;
 	}
     }
     if (!depth && buf < maxbuf) {
 	size_t len = PTR_DIFF(maxbuf, buf);
-	ND_PRINT((ndo, "Data: (%lu bytes)\n", (unsigned long)len));
-	smb_print_data(ndo, buf, len);
+	ND_PRINT("Data: (%lu bytes)\n", (unsigned long)len);
+	smb_data_print(ndo, buf, len);
 	return(buf + len);
     }
     return(buf);
@@ -987,7 +1010,7 @@ static const struct {
 /*
  * return a SMB error string from a SMB buffer
  */
-char *
+const char *
 smb_errstr(int class, int num)
 {
     static char ret[128];
@@ -1001,17 +1024,17 @@ smb_errstr(int class, int num)
 		const err_code_struct *err = err_classes[i].err_msgs;
 		for (j = 0; err[j].name; j++)
 		    if (num == err[j].code) {
-			snprintf(ret, sizeof(ret), "%s - %s (%s)",
+			nd_snprintf(ret, sizeof(ret), "%s - %s (%s)",
 			    err_classes[i].class, err[j].name, err[j].message);
 			return ret;
 		    }
 	    }
 
-	    snprintf(ret, sizeof(ret), "%s - %d", err_classes[i].class, num);
+	    nd_snprintf(ret, sizeof(ret), "%s - %d", err_classes[i].class, num);
 	    return ret;
 	}
 
-    snprintf(ret, sizeof(ret), "ERROR: Unknown error (%d,%d)", class, num);
+    nd_snprintf(ret, sizeof(ret), "ERROR: Unknown error (%d,%d)", class, num);
     return(ret);
 }
 
@@ -1892,6 +1915,6 @@ nt_errstr(uint32_t err)
 	    return nt_errors[i].name;
     }
 
-    snprintf(ret, sizeof(ret), "0x%08x", err);
+    nd_snprintf(ret, sizeof(ret), "0x%08x", err);
     return ret;
 }

@@ -16,10 +16,10 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -81,8 +81,8 @@ signature_compute_hmac_md5(const uint8_t *text, int text_len, unsigned char *key
      */
 
     /* start out by storing key in pads */
-    memset(k_ipad, 0, sizeof k_ipad);
-    memset(k_opad, 0, sizeof k_opad);
+    memset(k_ipad, 0, sizeof(k_ipad));
+    memset(k_opad, 0, sizeof(k_opad));
     memcpy(k_ipad, key, key_len);
     memcpy(k_opad, key, key_len);
 
@@ -190,7 +190,7 @@ signature_verify(netdissect_options *ndo, const u_char *pptr, u_int plen,
     } else {
         /* No - print the computed signature. */
         for (i = 0; i < sizeof(sig); ++i) {
-            ND_PRINT((ndo, "%02x", sig[i]));
+            ND_PRINT("%02x", sig[i]);
         }
 
         return (SIGNATURE_INVALID);
@@ -205,10 +205,3 @@ signature_verify(netdissect_options *ndo _U_, const u_char *pptr _U_,
     return (CANT_CHECK_SIGNATURE);
 }
 #endif
-
-/*
- * Local Variables:
- * c-style: whitesmith
- * c-basic-offset: 4
- * End:
- */

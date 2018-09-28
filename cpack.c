@@ -28,15 +28,17 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
 #include <stdlib.h>
 #include <string.h>
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
+
+#include "netdissect.h"
+#include "extract.h"
 
 #include "cpack.h"
-#include "extract.h"
 
 const uint8_t *
 cpack_next_boundary(const uint8_t *buf, const uint8_t *p, size_t alignment)

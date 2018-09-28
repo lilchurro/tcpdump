@@ -19,11 +19,13 @@
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
+#include <string.h>
+
 /*
  * For 8-bit values; needed to fetch a one-byte value.  Byte order
  * isn't relevant, and alignment isn't an issue.
  */
-#define EXTRACT_U_1(p)	(*(p))
+#define EXTRACT_U_1(p)	((uint8_t)(*(p)))
 #define EXTRACT_S_1(p)	((int8_t)(*(p)))
 
 /*
@@ -63,7 +65,6 @@
 #endif
 
 #if (defined(__i386__) || defined(_M_IX86) || defined(__X86__) || defined(__x86_64__) || defined(_M_X64)) || \
-    (defined(__arm__) || defined(_M_ARM) || defined(__aarch64__)) || \
     (defined(__m68k__) && (!defined(__mc68000__) && !defined(__mc68010__))) || \
     (defined(__ppc__) || defined(__ppc64__) || defined(_M_PPC) || defined(_ARCH_PPC) || defined(_ARCH_PPC64)) || \
     (defined(__s390__) || defined(__s390x__) || defined(__zarch__))
@@ -72,9 +73,6 @@
  * cast the pointer and fetch through it.
  *
  * XXX - are those all the x86 tests we need?
- * XXX - do we need to worry about ARMv1 through ARMv5, which didn't
- * support unaligned loads, and, if so, do we need to worry about all
- * of them, or just some of them, e.g. ARMv5?
  * XXX - are those the only 68k tests we need not to generated
  * unaligned accesses if the target is the 68000 or 68010?
  * XXX - are there any tests we don't need, because some definitions are for
@@ -82,31 +80,31 @@
  * XXX - do we need to test for both 32-bit and 64-bit versions of those
  * architectures in all cases?
  */
-static inline uint16_t UNALIGNED_OK
+UNALIGNED_OK static inline uint16_t
 EXTRACT_BE_U_2(const void *p)
 {
 	return ((uint16_t)ntohs(*(const uint16_t *)(p)));
 }
 
-static inline int16_t UNALIGNED_OK
+UNALIGNED_OK static inline int16_t
 EXTRACT_BE_S_2(const void *p)
 {
 	return ((int16_t)ntohs(*(const int16_t *)(p)));
 }
 
-static inline uint32_t UNALIGNED_OK
+UNALIGNED_OK static inline uint32_t
 EXTRACT_BE_U_4(const void *p)
 {
 	return ((uint32_t)ntohl(*(const uint32_t *)(p)));
 }
 
-static inline int32_t UNALIGNED_OK
+UNALIGNED_OK static inline int32_t
 EXTRACT_BE_S_4(const void *p)
 {
 	return ((int32_t)ntohl(*(const int32_t *)(p)));
 }
 
-static inline uint64_t UNALIGNED_OK
+UNALIGNED_OK static inline uint64_t
 EXTRACT_BE_U_8(const void *p)
 {
 	return ((uint64_t)(((uint64_t)ntohl(*((const uint32_t *)(p) + 0))) << 32 |
@@ -114,22 +112,33 @@ EXTRACT_BE_U_8(const void *p)
 
 }
 
-static inline int64_t UNALIGNED_OK
+UNALIGNED_OK static inline int64_t
 EXTRACT_BE_S_8(const void *p)
 {
 	return ((int64_t)(((int64_t)ntohl(*((const uint32_t *)(p) + 0))) << 32 |
 		((uint64_t)ntohl(*((const uint32_t *)(p) + 1))) << 0));
 
 }
-#elif defined(__GNUC__) && defined(HAVE___ATTRIBUTE__) && \
+
+/*
+ * Extract an IPv4 address, which is in network byte order, and not
+ * necessarily aligned, and provide the result in host byte order.
+ */
+UNALIGNED_OK static inline uint32_t
+EXTRACT_IPV4_TO_HOST_ORDER(const void *p)
+{
+	return ((uint32_t)ntohl(*(const uint32_t *)(p)));
+}
+#elif ND_IS_AT_LEAST_GNUC_VERSION(2,0) && \
     (defined(__alpha) || defined(__alpha__) || \
      defined(__mips) || defined(__mips__))
 /*
  * This is MIPS or Alpha, which don't natively handle unaligned loads,
  * but which have instructions that can help when doing unaligned
- * loads, and this is a GCC-compatible compiler and we have __attribute__,
- * which we assume that mean we have __attribute__((packed)), which
- * we can use to convince the compiler to generate those instructions.
+ * loads, and this is GCC 2.0 or later or a compiler that claims to
+ * be GCC 2.0 or later, which we assume that mean we have
+ * __attribute__((packed)), which we can use to convince the compiler
+ * to generate those instructions.
  *
  * Declare packed structures containing a uint16_t and a uint32_t,
  * cast the pointer to point to one of those, and fetch through it;
@@ -228,6 +237,16 @@ EXTRACT_BE_S_8(const void *p)
 	return ((int64_t)(((uint64_t)ntohl(((const unaligned_uint32_t *)(p) + 0)->val)) << 32 |
 		((uint64_t)ntohl(((const unaligned_uint32_t *)(p) + 1)->val)) << 0));
 }
+
+/*
+ * Extract an IPv4 address, which is in network byte order, and not
+ * necessarily aligned, and provide the result in host byte order.
+ */
+UNALIGNED_OK static inline uint32_t
+EXTRACT_IPV4_TO_HOST_ORDER(const void *p)
+{
+	return ((uint32_t)ntohl(((const unaligned_uint32_t *)(p))->val));
+}
 #else
 /*
  * This architecture doesn't natively support unaligned loads, and either
@@ -236,6 +255,16 @@ EXTRACT_BE_S_8(const void *p)
  * set to do unaligned loads, so do unaligned loads of big-endian
  * quantities the hard way - fetch the bytes one at a time and
  * assemble them.
+ *
+ * XXX - ARM is a special case.  ARMv1 through ARMv5 didn't suppory
+ * unaligned loads; ARMv6 and later support it *but* have a bit in
+ * the system control register that the OS can set and that causes
+ * unaligned loads to fault rather than succeeding.
+ *
+ * At least some OSes may set that flag, so we do *not* treat ARM
+ * as supporting unaligned loads.  If your OS supports them on ARM,
+ * and you want to use them, please update the tests in the #if above
+ * to check for ARM *and* for your OS.
  */
 #define EXTRACT_BE_U_2(p) \
 	((uint16_t)(((uint16_t)(*((const uint8_t *)(p) + 0)) << 8) | \
@@ -271,8 +300,87 @@ EXTRACT_BE_S_8(const void *p)
 	           ((uint64_t)(*((const uint8_t *)(p) + 5)) << 16) | \
 	           ((uint64_t)(*((const uint8_t *)(p) + 6)) << 8) | \
 	           ((uint64_t)(*((const uint8_t *)(p) + 7)) << 0)))
+
+/*
+ * Extract an IPv4 address, which is in network byte order, and not
+ * necessarily aligned, and provide the result in host byte order.
+ */
+#define EXTRACT_IPV4_TO_HOST_ORDER(p) \
+	((uint32_t)(((uint32_t)(*((const uint8_t *)(p) + 0)) << 24) | \
+	            ((uint32_t)(*((const uint8_t *)(p) + 1)) << 16) | \
+	            ((uint32_t)(*((const uint8_t *)(p) + 2)) << 8) | \
+	            ((uint32_t)(*((const uint8_t *)(p) + 3)) << 0)))
 #endif /* unaligned access checks */
 
+/*
+ * Extract numerical values in *host* byte order.  (Some metadata
+ * headers are in the byte order of the host that wrote the file,
+ * and libpcap translate them to the byte order of the host
+ * reading the file.  This means that if a program on that host
+ * reads with libpcap and writes to a new file, the new file will
+ * be written in the byte order of the host writing the file.  Thus,
+ * the magic number in pcap files and byte-order magic in pcapng
+ * files can be used to determine the byte order in those metadata
+ * headers.)
+ *
+ * XXX - on platforms that can do unaligned accesses, just cast and
+ * dereference the pointer.
+ */
+static inline uint16_t
+EXTRACT_HE_U_2(const void *p)
+{
+	uint16_t val;
+
+	UNALIGNED_MEMCPY(&val, p, sizeof(uint16_t));
+	return val;
+}
+
+static inline int16_t
+EXTRACT_HE_S_2(const void *p)
+{
+	int16_t val;
+
+	UNALIGNED_MEMCPY(&val, p, sizeof(int16_t));
+	return val;
+}
+
+static inline uint32_t
+EXTRACT_HE_U_4(const void *p)
+{
+	uint32_t val;
+
+	UNALIGNED_MEMCPY(&val, p, sizeof(uint32_t));
+	return val;
+}
+
+static inline int32_t
+EXTRACT_HE_S_4(const void *p)
+{
+	int32_t val;
+
+	UNALIGNED_MEMCPY(&val, p, sizeof(int32_t));
+	return val;
+}
+
+/*
+ * Extract an IPv4 address, which is in network byte order, and which
+ * is not necessarily aligned on a 4-byte boundary, and provide the
+ * result in network byte order.
+ *
+ * This works the same way regardless of the host's byte order.
+ */
+static inline uint32_t
+EXTRACT_IPV4_TO_NETWORK_ORDER(const void *p)
+{
+	uint32_t addr;
+
+	UNALIGNED_MEMCPY(&addr, p, sizeof(uint32_t));
+	return addr;
+}
+
+/*
+ * Non-power-of-2 sizes.
+ */
 #define EXTRACT_BE_U_3(p) \
 	((uint32_t)(((uint32_t)(*((const uint8_t *)(p) + 0)) << 16) | \
 	            ((uint32_t)(*((const uint8_t *)(p) + 1)) << 8) | \
@@ -319,7 +427,7 @@ EXTRACT_BE_S_8(const void *p)
 
 #define EXTRACT_BE_S_6(p) \
 	(((*((const uint8_t *)(p) + 0)) & 0x80) ? \
-	  ((uint64_t)(((uint64_t)(*((const uint8_t *)(p) + 0)) << 40) | \
+	   ((int64_t)(((uint64_t)(*((const uint8_t *)(p) + 0)) << 40) | \
 	              ((uint64_t)(*((const uint8_t *)(p) + 1)) << 32) | \
 	              ((uint64_t)(*((const uint8_t *)(p) + 2)) << 24) | \
 	              ((uint64_t)(*((const uint8_t *)(p) + 3)) << 16) | \

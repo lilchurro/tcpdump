@@ -33,13 +33,10 @@
 /* \summary: SunATM DLPI capture printer */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
-
-struct mbuf;
-struct rtentry;
+#include "netdissect-stdinc.h"
 
 #include "netdissect.h"
 #include "extract.h"
@@ -72,13 +69,14 @@ sunatm_if_print(netdissect_options *ndo,
 	u_char vpi;
 	u_int traftype;
 
+	ndo->ndo_protocol = "sunatm_if";
 	if (caplen < PKT_BEGIN_POS) {
-		ND_PRINT((ndo, "[|atm]"));
+		nd_print_trunc(ndo);
 		return (caplen);
 	}
 
 	if (ndo->ndo_eflag) {
-		ND_PRINT((ndo, EXTRACT_U_1(p + DIR_POS) & 0x80 ? "Tx: " : "Rx: "));
+		ND_PRINT(EXTRACT_U_1(p + DIR_POS) & 0x80 ? "Tx: " : "Rx: ");
 	}
 
 	switch (EXTRACT_U_1(p + DIR_POS) & 0x0f) {

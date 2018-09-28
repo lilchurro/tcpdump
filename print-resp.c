@@ -30,10 +30,10 @@
 /* \summary: REdis Serialization Protocol (RESP) printer */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include <config.h>
 #endif
 
-#include <netdissect-stdinc.h>
+#include "netdissect-stdinc.h"
 #include "netdissect.h"
 #include <limits.h>
 #include <string.h>
@@ -42,7 +42,6 @@
 
 #include "extract.h"
 
-static const char tstr[] = " [|RESP]";
 
 /*
  * For information regarding RESP, see: http://redis.io/topics/protocol
@@ -54,22 +53,22 @@ static const char tstr[] = " [|RESP]";
 #define RESP_BULK_STRING      '$'
 #define RESP_ARRAY            '*'
 
-#define resp_print_empty(ndo)            ND_PRINT((ndo, " empty"))
-#define resp_print_null(ndo)             ND_PRINT((ndo, " null"))
-#define resp_print_length_too_large(ndo) ND_PRINT((ndo, " length too large"))
-#define resp_print_length_negative(ndo)  ND_PRINT((ndo, " length negative and not -1"))
-#define resp_print_invalid(ndo)          ND_PRINT((ndo, " invalid"))
+#define resp_print_empty(ndo)            ND_PRINT(" empty")
+#define resp_print_null(ndo)             ND_PRINT(" null")
+#define resp_print_length_too_large(ndo) ND_PRINT(" length too large")
+#define resp_print_length_negative(ndo)  ND_PRINT(" length negative and not -1")
+#define resp_print_invalid(ndo)          ND_PRINT(" invalid")
 
 void       resp_print(netdissect_options *, const u_char *, u_int);
-static int resp_parse(netdissect_options *, register const u_char *, int);
-static int resp_print_string_error_integer(netdissect_options *, register const u_char *, int);
-static int resp_print_simple_string(netdissect_options *, register const u_char *, int);
-static int resp_print_integer(netdissect_options *, register const u_char *, int);
-static int resp_print_error(netdissect_options *, register const u_char *, int);
-static int resp_print_bulk_string(netdissect_options *, register const u_char *, int);
-static int resp_print_bulk_array(netdissect_options *, register const u_char *, int);
-static int resp_print_inline(netdissect_options *, register const u_char *, int);
-static int resp_get_length(netdissect_options *, register const u_char *, int, const u_char **);
+static int resp_parse(netdissect_options *, const u_char *, int);
+static int resp_print_string_error_integer(netdissect_options *, const u_char *, int);
+static int resp_print_simple_string(netdissect_options *, const u_char *, int);
+static int resp_print_integer(netdissect_options *, const u_char *, int);
+static int resp_print_error(netdissect_options *, const u_char *, int);
+static int resp_print_bulk_string(netdissect_options *, const u_char *, int);
+static int resp_print_bulk_array(netdissect_options *, const u_char *, int);
+static int resp_print_inline(netdissect_options *, const u_char *, int);
+static int resp_get_length(netdissect_options *, const u_char *, int, const u_char **);
 
 #define LCHECK2(_tot_len, _len) \
     {                           \
@@ -116,7 +115,7 @@ static int resp_get_length(netdissect_options *, register const u_char *, int, c
 #define FIND_CR_OR_LF(_ptr, _len)           \
     for (;;) {                              \
         LCHECK(_len);                       \
-        ND_TCHECK(*_ptr);                   \
+        ND_TCHECK_1(_ptr);                  \
         if (*_ptr == '\r' || *_ptr == '\n') \
             break;                          \
         _ptr++;                             \
@@ -136,7 +135,7 @@ static int resp_get_length(netdissect_options *, register const u_char *, int, c
             /*                                   \
              * Have we hit the end of data?      \
              */                                  \
-            if (_len == 0 || !ND_TTEST(*_ptr)) { \
+            if (_len == 0 || !ND_TTEST_1(_ptr)) {\
                 /*                               \
                  * Yes.  Have we seen a \r       \
                  * or \n?                        \
@@ -204,8 +203,8 @@ static int resp_get_length(netdissect_options *, register const u_char *, int, c
  * Assumes the data has already been verified as present.
  */
 #define RESP_PRINT_SEGMENT(_ndo, _bp, _len)            \
-    ND_PRINT((_ndo, " \""));                           \
-    if (fn_printn(_ndo, _bp, _len, _ndo->ndo_snapend)) \
+    ND_PRINT(" \"");                                   \
+    if (nd_printn(_ndo, _bp, _len, _ndo->ndo_snapend)) \
         goto trunc;                                    \
     fn_print_char(_ndo, '"');
 
@@ -214,10 +213,11 @@ resp_print(netdissect_options *ndo, const u_char *bp, u_int length)
 {
     int ret_len = 0, length_cur = length;
 
+    ndo->ndo_protocol = "resp";
     if(!bp || length <= 0)
         return;
 
-    ND_PRINT((ndo, ": RESP"));
+    ND_PRINT(": RESP");
     while (length_cur > 0) {
         /*
          * This block supports redis pipelining.
@@ -237,11 +237,11 @@ resp_print(netdissect_options *ndo, const u_char *bp, u_int length)
     return;
 
 trunc:
-    ND_PRINT((ndo, "%s", tstr));
+    nd_print_trunc(ndo);
 }
 
 static int
-resp_parse(netdissect_options *ndo, register const u_char *bp, int length)
+resp_parse(netdissect_options *ndo, const u_char *bp, int length)
 {
     u_char op;
     int ret_len;
@@ -272,22 +272,22 @@ trunc:
 }
 
 static int
-resp_print_simple_string(netdissect_options *ndo, register const u_char *bp, int length) {
+resp_print_simple_string(netdissect_options *ndo, const u_char *bp, int length) {
     return resp_print_string_error_integer(ndo, bp, length);
 }
 
 static int
-resp_print_integer(netdissect_options *ndo, register const u_char *bp, int length) {
+resp_print_integer(netdissect_options *ndo, const u_char *bp, int length) {
     return resp_print_string_error_integer(ndo, bp, length);
 }
 
 static int
-resp_print_error(netdissect_options *ndo, register const u_char *bp, int length) {
+resp_print_error(netdissect_options *ndo, const u_char *bp, int length) {
     return resp_print_string_error_integer(ndo, bp, length);
 }
 
 static int
-resp_print_string_error_integer(netdissect_options *ndo, register const u_char *bp, int length) {
+resp_print_string_error_integer(netdissect_options *ndo, const u_char *bp, int length) {
     int length_cur = length, len, ret_len;
     const u_char *bp_ptr;
 
@@ -322,7 +322,7 @@ trunc:
 }
 
 static int
-resp_print_bulk_string(netdissect_options *ndo, register const u_char *bp, int length) {
+resp_print_bulk_string(netdissect_options *ndo, const u_char *bp, int length) {
     int length_cur = length, string_len;
 
     /* bp points to the op; skip it */
@@ -368,7 +368,7 @@ trunc:
 }
 
 static int
-resp_print_bulk_array(netdissect_options *ndo, register const u_char *bp, int length) {
+resp_print_bulk_array(netdissect_options *ndo, const u_char *bp, int length) {
     u_int length_cur = length;
     int array_len, i, ret_len;
 
@@ -407,7 +407,7 @@ trunc:
 }
 
 static int
-resp_print_inline(netdissect_options *ndo, register const u_char *bp, int length) {
+resp_print_inline(netdissect_options *ndo, const u_char *bp, int length) {
     int length_cur = length;
     int len;
     const u_char *bp_ptr;
@@ -454,7 +454,7 @@ trunc:
 }
 
 static int
-resp_get_length(netdissect_options *ndo, register const u_char *bp, int len, const u_char **endp)
+resp_get_length(netdissect_options *ndo, const u_char *bp, int len, const u_char **endp)
 {
     int result;
     u_char c;
