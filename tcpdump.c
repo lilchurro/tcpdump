@@ -3117,17 +3117,17 @@ print_usage(void)
 	(void)fprintf(stderr,
 "\t\t[ -C file_size ] [ -E algo:secret ] [ -F file ] [ -G seconds ]\n");
 	(void)fprintf(stderr,
-"\t\t[ -i interface ]" IMMEDIATE_MODE_USAGE j_FLAG_USAGE "\n");
+"\t\t[ --mask-external-address mask_ip ] [ -i interface ]" IMMEDIATE_MODE_USAGE j_FLAG_USAGE "\n");
 #ifdef HAVE_PCAP_FINDALLDEVS_EX
 	(void)fprintf(stderr,
 "\t\t" LIST_REMOTE_INTERFACES_USAGE "\n");
 #endif
 	(void)fprintf(stderr,
-"\t\t[ -M secret ] [ --number ] [ --print ]" Q_FLAG_USAGE "\n");
+"\t\t[ -M secret ] [ --no-tcpudp-payload ] [ --number ] [ --print ]" Q_FLAG_USAGE "\n");
 	(void)fprintf(stderr,
 "\t\t[ -r file ] [ -s snaplen ]" TIME_STAMP_PRECISION_USAGE "\n");
 	(void)fprintf(stderr,
-"\t\t[ -T type ] [ --version ] [ -V file ] [ -w file ]\n");
+"\t\t[ -T type ] [ --version ] [ --zero-tcpudp-payload ] [ -V file ] [ -w file ]\n");
 	(void)fprintf(stderr,
 "\t\t[ -W filecount ] [ -y datalinktype ]\n");
 	(void)fprintf(stderr,
