@@ -4344,7 +4344,16 @@ fi
 # present, imply others are present?
 #
 if test ! -z "$with_sandbox-capsicum" && test "$with_sandbox-capsicum" != "no" ; then
-	for ac_func in cap_enter cap_rights_limit cap_ioctls_limit openat
+	#
+	# First, make sure we have the required header.
+	#
+	ac_fn_c_check_header_mongrel "$LINENO" "sys/capsicum.h" "ac_cv_header_sys_capsicum_h" "$ac_includes_default"
+if test "x$ac_cv_header_sys_capsicum_h" = xyes; then :
+
+		#
+		# We do; now make sure we have the required functions.
+		#
+		for ac_func in cap_enter cap_rights_limit cap_ioctls_limit openat
 do :
   as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
 ac_fn_c_check_func "$LINENO" "$ac_func" "$as_ac_var"
@@ -4357,6 +4366,10 @@ else
   ac_lbl_capsicum_function_not_seen=yes
 fi
 done
+
+
+fi
+
 
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for cap_init in -lcasper" >&5
 $as_echo_n "checking for cap_init in -lcasper... " >&6; }
@@ -7136,6 +7149,49 @@ if ac_fn_c_try_compile "$LINENO"; then :
 $as_echo "yes" >&6; }
 		CFLAGS="$save_CFLAGS"
 		V_CCOPT="$V_CCOPT -Wshadow"
+
+else
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+		CFLAGS="$save_CFLAGS"
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports the -Wsign-compare option" >&5
+$as_echo_n "checking whether the compiler supports the -Wsign-compare option... " >&6; }
+	save_CFLAGS="$CFLAGS"
+	if expr "x-Wsign-compare" : "x-W.*" >/dev/null
+	then
+	    CFLAGS="$CFLAGS $ac_lbl_unknown_warning_option_error -Wsign-compare"
+	elif expr "x-Wsign-compare" : "x-f.*" >/dev/null
+	then
+	    CFLAGS="$CFLAGS -Werror -Wsign-compare"
+	elif expr "x-Wsign-compare" : "x-m.*" >/dev/null
+	then
+	    CFLAGS="$CFLAGS -Werror -Wsign-compare"
+	else
+	    CFLAGS="$CFLAGS -Wsign-compare"
+	fi
+	cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+return 0
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		CFLAGS="$save_CFLAGS"
+		V_CCOPT="$V_CCOPT -Wsign-compare"
 
 else
 
