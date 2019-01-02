@@ -350,14 +350,32 @@ extern void txtproto_print(netdissect_options *, const u_char *, u_int,
 
 /*
  * Locale-independent macros for testing character properties and
- * stripping the 8th bit from characters.  Assumed to be handed
- * a value between 0 and 255, i.e. don't hand them a char, as
- * those might be in the range -128 to 127.
+ * stripping the 8th bit from characters.
+ *
+ * Byte values outside the ASCII range are considered unprintable, so
+ * both ND_ISPRINT() and ND_ISGRAPH() return "false" for them.
+ *
+ * Assumed to be handed a value between 0 and 255, i.e. don't hand them
+ * a char, as those might be in the range -128 to 127.
  */
 #define ND_ISASCII(c)	(!((c) & 0x80))	/* value is an ASCII code point */
 #define ND_ISPRINT(c)	((c) >= 0x20 && (c) <= 0x7E)
 #define ND_ISGRAPH(c)	((c) > 0x20 && (c) <= 0x7E)
 #define ND_TOASCII(c)	((c) & 0x7F)
+
+/*
+ * Locale-independent macros for coverting to upper or lower case.
+ *
+ * Byte values outside the ASCII range are not converted.  Byte values
+ * *in* the ASCII range are converted to byte values in the ASCII range;
+ * in particular, 'i' is upper-cased to 'I" and 'I' is lower-cased to 'i',
+ * even in Turkish locales.
+ *
+ * Assumed to be handed a value between 0 and 255, i.e. don't hand
+ * them a char, as those might be in the range -128 to 127.
+ */
+#define ND_TOLOWER(c)	(((c) >= 'A' && (c) <= 'Z') ? (c) - 'A' + 'a' : (c))
+#define ND_TOUPPER(c)	(((c) >= 'a' && (c) <= 'z') ? (c) - 'a' + 'A' : (c))
 
 #if (defined(__i386__) || defined(_M_IX86) || defined(__X86__) || defined(__x86_64__) || defined(_M_X64)) || \
     (defined(__arm__) || defined(_M_ARM) || defined(__aarch64__)) || \
@@ -538,6 +556,7 @@ extern void hsrp_print(netdissect_options *, const u_char *, u_int);
 extern void http_print(netdissect_options *, const u_char *, u_int);
 extern void icmp6_print(netdissect_options *, const u_char *, u_int, const u_char *, int);
 extern void icmp_print(netdissect_options *, const u_char *, u_int, const u_char *, int);
+extern u_int ieee802_11_radio_print(netdissect_options *, const u_char *, u_int, u_int);
 extern void igmp_print(netdissect_options *, const u_char *, u_int);
 extern void igrp_print(netdissect_options *, const u_char *, u_int);
 extern void ip6_print(netdissect_options *, const u_char *, u_int);
@@ -655,10 +674,10 @@ struct cksum_vec {
 extern uint16_t in_cksum(const struct cksum_vec *, int);
 extern uint16_t in_cksum_shouldbe(uint16_t, uint16_t);
 
-extern int nextproto4_cksum(netdissect_options *, const struct ip *, const uint8_t *, u_int, u_int, u_int);
+extern uint16_t nextproto4_cksum(netdissect_options *, const struct ip *, const uint8_t *, u_int, u_int, u_int);
 
 /* in print-ip6.c */
-extern int nextproto6_cksum(netdissect_options *, const struct ip6_hdr *, const uint8_t *, u_int, u_int, u_int);
+extern uint16_t nextproto6_cksum(netdissect_options *, const struct ip6_hdr *, const uint8_t *, u_int, u_int, u_int);
 
 /* Utilities */
 extern void nd_print_trunc(netdissect_options *);

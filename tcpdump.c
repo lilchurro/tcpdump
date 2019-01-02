@@ -81,7 +81,7 @@ The Regents of the University of California.  All rights reserved.\n";
  * in the opposite order works fine.
  */
 #ifdef HAVE_CAPSICUM
-#include <sys/capability.h>
+#include <sys/capsicum.h>
 #include <sys/ioccom.h>
 #include <net/bpf.h>
 #include <libgen.h>
@@ -629,6 +629,10 @@ show_remote_devices_and_exit(void)
 #define J_FLAG
 #endif /* PCAP_ERROR_TSTAMP_TYPE_NOTSUP */
 
+#ifdef USE_LIBSMI
+#define m_FLAG_USAGE "[ -m module ] ..."
+#endif
+
 #ifdef HAVE_PCAP_SETDIRECTION
 #define Q_FLAG "Q:"
 #define Q_FLAG_USAGE " [ -Q in|out|inout ]"
@@ -727,7 +731,7 @@ static const struct option longopts[] = {
 };
 
 #ifdef HAVE_PCAP_FINDALLDEVS_EX
-#define LIST_REMOTE_INTERFACES_USAGE "[ --list-remote-interfaces remote-source  ]"
+#define LIST_REMOTE_INTERFACES_USAGE "[ --list-remote-interfaces remote-source ]"
 #else
 #define LIST_REMOTE_INTERFACES_USAGE
 #endif
@@ -1170,6 +1174,9 @@ _U_
 		 */
 		endp++;	/* Include the trailing / in the URL; pcap_findalldevs_ex() requires it */
 		host_url = malloc(endp - url + 1);
+		if (host_url == NULL && (endp - url + 1) > 0)
+			error("Invalid allocation for host");
+
 		memcpy(host_url, url, endp - url);
 		host_url[endp - url] = '\0';
 		status = pcap_findalldevs_ex(host_url, NULL, &devlist, ebuf);
@@ -2013,15 +2020,14 @@ main(int argc, char **argv)
 #endif
 		dlt = pcap_datalink(pd);
 		dlt_name = pcap_datalink_val_to_name(dlt);
+		fprintf(stderr, "reading from file %s", RFileName);
 		if (dlt_name == NULL) {
-			fprintf(stderr, "reading from file %s, link-type %u\n",
-			    RFileName, dlt);
+			fprintf(stderr, ", link-type %u", dlt);
 		} else {
-			fprintf(stderr,
-			    "reading from file %s, link-type %s (%s)\n",
-			    RFileName, dlt_name,
-			    pcap_datalink_val_to_description(dlt));
+			fprintf(stderr, ", link-type %s (%s)", dlt_name,
+				pcap_datalink_val_to_description(dlt));
 		}
+		fprintf(stderr, ", snapshot length %d\n", pcap_snapshot(pd));
 #ifdef DLT_LINUX_SLL2
 		if (dlt == DLT_LINUX_SLL2)
 			fprintf(stderr, "Warning: interface names might be incorrect\n");
@@ -2300,7 +2306,7 @@ DIAG_ON_CLANG(assign-enum)
 		if (pdd == NULL)
 			error("%s", pcap_geterr(pd));
 #ifdef HAVE_CAPSICUM
-		set_dumper_capsicum_rights(p);
+		set_dumper_capsicum_rights(pdd);
 #endif
 		dumpinfo.pd = pd;
 		dumpinfo.pdd = pdd;
@@ -2421,14 +2427,14 @@ DIAG_ON_CLANG(assign-enum)
 			(void)fprintf(stderr, "%s: ", program_name);
 		dlt = pcap_datalink(pd);
 		dlt_name = pcap_datalink_val_to_name(dlt);
+		(void)fprintf(stderr, "listening on %s", device);
 		if (dlt_name == NULL) {
-			(void)fprintf(stderr, "listening on %s, link-type %u, capture size %u bytes\n",
-			    device, dlt, ndo->ndo_snaplen);
+			(void)fprintf(stderr, ", link-type %u", dlt);
 		} else {
-			(void)fprintf(stderr, "listening on %s, link-type %s (%s), capture size %u bytes\n",
-			    device, dlt_name,
-			    pcap_datalink_val_to_description(dlt), ndo->ndo_snaplen);
+			(void)fprintf(stderr, ", link-type %s (%s)", dlt_name,
+				      pcap_datalink_val_to_description(dlt));
 		}
+		(void)fprintf(stderr, ", snapshot length %d bytes\n", ndo->ndo_snaplen);
 		(void)fflush(stderr);
 	}
 
@@ -2543,15 +2549,15 @@ DIAG_ON_CLANG(assign-enum)
 				 * Report the new file.
 				 */
 				dlt_name = pcap_datalink_val_to_name(dlt);
+				fprintf(stderr, "reading from file %s", RFileName);
 				if (dlt_name == NULL) {
-					fprintf(stderr, "reading from file %s, link-type %u\n",
-					    RFileName, dlt);
+					fprintf(stderr, ", link-type %u", dlt);
 				} else {
-					fprintf(stderr,
-					"reading from file %s, link-type %s (%s)\n",
-					    RFileName, dlt_name,
-					    pcap_datalink_val_to_description(dlt));
+					fprintf(stderr, ", link-type %s (%s)",
+						dlt_name,
+						pcap_datalink_val_to_description(dlt));
 				}
+				fprintf(stderr, ", snapshot length %d\n", pcap_snapshot(pd));
 			}
 		}
 	}
@@ -3127,6 +3133,10 @@ print_usage(void)
 #ifdef HAVE_PCAP_FINDALLDEVS_EX
 	(void)fprintf(stderr,
 "\t\t" LIST_REMOTE_INTERFACES_USAGE "\n");
+#endif
+#ifdef USE_LIBSMI
+	(void)fprintf(stderr,
+"\t\t" m_FLAG_USAGE "\n");
 #endif
 	(void)fprintf(stderr,
 "\t\t[ -M secret ] [ --no-tcpudp-payload ] [ --number ] [ --print ]" Q_FLAG_USAGE "\n");

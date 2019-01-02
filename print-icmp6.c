@@ -776,7 +776,7 @@ print_lladdr(netdissect_options *ndo, const uint8_t *p, size_t l)
 	}
 }
 
-static int icmp6_cksum(netdissect_options *ndo, const struct ip6_hdr *ip6,
+static uint16_t icmp6_cksum(netdissect_options *ndo, const struct ip6_hdr *ip6,
 	const struct icmp6_hdr *icp, u_int len)
 {
 	return nextproto6_cksum(ndo, ip6, (const uint8_t *)(const void *)icp, len, len,
@@ -1165,8 +1165,9 @@ icmp6_print(netdissect_options *ndo,
 		break;
 	case ICMP6_ECHO_REQUEST:
 	case ICMP6_ECHO_REPLY:
+                /* The check below covers both icmp6_id and icmp6_seq. */
                 ND_TCHECK_2(dp->icmp6_seq);
-                ND_PRINT(", seq %u", EXTRACT_BE_U_2(dp->icmp6_seq));
+                ND_PRINT(", id %u, seq %u", EXTRACT_BE_U_2(dp->icmp6_id), EXTRACT_BE_U_2(dp->icmp6_seq));
 		break;
 	case ICMP6_MEMBERSHIP_QUERY:
 		if (length == MLD_MINLEN) {

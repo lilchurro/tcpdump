@@ -215,6 +215,7 @@
    * #defines to let us use them.
    */
   #define isascii __isascii
+  #define isatty _isatty
   #define stat _stat
   #define strdup _strdup
   #define open _open
@@ -327,8 +328,8 @@ typedef char* caddr_t;
      * VS prior to 2015, or MingGW; assume we have _snprintf_s() and
      * _vsnprintf_s(), which guarantee null termination.
      */
-    #define nd_snprintf(buf, buflen, fmt, ...) \
-        _snprintf_s(buf, buflen, _TRUNCATE, fmt, __VA_ARGS__)
+    #define nd_snprintf(buf, buflen, ...) \
+        _snprintf_s(buf, buflen, _TRUNCATE, __VA_ARGS__)
     #define nd_vsnprintf(buf, buflen, fmt, ap) \
         _vsnprintf_s(buf, buflen, _TRUNCATE, fmt, ap)
   #endif /* defined(_MSC_VER) && _MSC_VER >= 1900 */
@@ -518,8 +519,16 @@ struct in6_addr {
  * it also implement __has_attribute() (for example, GCC 5.0 and later
  * have __has_attribute(), and the "fallthrough" attribute was introduced
  * in GCC 7).
+ *
+ * Unfortunately, Clang does this wrong - a statement
+ *
+ *    __attribute__ ((fallthrough));
+ *
+ * produces bogus -Wmissing-declaration "declaration does not declare
+ * anything" warnings (dear Clang: that's not a declaration, it's an
+ * empty statement).  GCC, however, has no trouble with this.
  */
-#if __has_attribute(fallthrough)
+#if __has_attribute(fallthrough) && !defined(__clang__)
 #  define ND_FALL_THROUGH __attribute__ ((fallthrough))
 #else
 #  define ND_FALL_THROUGH
