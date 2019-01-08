@@ -77,6 +77,7 @@ option(WITH_CRYPTO "Build with OpenSSL/libressl libcrypto, if available" ON)
 option(WITH_CAPSICUM "Build with Capsicum security functions, if available" ON)
 option(WITH_CAP_NG "Use libcap-ng, if available" ON)
 option(ENABLE_SMB "Build with the SMB dissector" ON)
+option(ENABLE_SANITIZ "Build with sanitization of IPs and TCP/UDP payloads" ON)
 
 #
 # String parameters.  Neither of them are set, initially; only if the
@@ -1075,6 +1076,12 @@ set(NETDISSECT_SOURCE_LIST_C
     strtoaddr.c
     util-print.c
 )
+
+if(ENABLE_SANITIZ)
+    set(NETDISSECT_SOURCE_LIST_C ${NETDISSECT_SOURCE_LIST_C} 
+	clean_cap_dump.c)
+endif(ENABLE_SANITIZ)
+
 
 #
 # Replace missing functions
