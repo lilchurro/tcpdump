@@ -1202,9 +1202,10 @@ _U_
 
 #ifdef HAVE_PCAP_OPEN
 /*
- * Prefix for rpcap URLs.
+ * Prefixes for rpcap URLs.
  */
 static char rpcap_prefix[] = "rpcap://";
+static char rpcap_ssl_prefix[] = "rpcaps://";
 #endif
 
 static pcap_t *
@@ -1220,7 +1221,8 @@ open_interface(const char *device, netdissect_options *ndo, char *ebuf)
 	/*
 	 * Is this an rpcap URL?
 	 */
-	if (strncmp(device, rpcap_prefix, sizeof(rpcap_prefix) - 1) == 0) {
+	if (strncmp(device, rpcap_prefix, sizeof(rpcap_prefix) - 1) == 0 ||
+	    strncmp(device, rpcap_ssl_prefix, sizeof(rpcap_ssl_prefix) - 1) == 0) {
 		/*
 		 * Yes.  Open it with pcap_open().
 		 */
